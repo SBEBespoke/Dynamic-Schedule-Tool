@@ -58,17 +58,17 @@ export default function AddEditAreaSessionModal({
       day_id:     form.day_id,
       name:       form.name.trim(),
 
-      // Start
+      // Start — start_mins must never be null (DB constraint); use 0 as sentinel when dep drives timing
       dep_type:        form.dep_type,
       dep_session_id:  form.dep_type === 'after' ? (form.dep_session_id || null) : null,
       dep_offset_mins: form.dep_type === 'after' ? parseInt(form.dep_offset_mins, 10) : 0,
-      start_mins:      form.dep_type === 'fixed'  ? toMins(form.start_time) : null,
+      start_mins:      form.dep_type === 'fixed'  ? toMins(form.start_time) : 0,
 
-      // Finish
+      // Finish — duration_mins must never be null (DB constraint); use 0 as sentinel when dep drives finish
       fin_dep_type:        form.fin_dep_type,
       fin_dep_session_id:  form.fin_dep_type !== 'duration' ? (form.fin_dep_session_id || null) : null,
       fin_dep_offset_mins: form.fin_dep_type !== 'duration' ? parseInt(form.fin_dep_offset_mins, 10) : 0,
-      duration_mins:       form.fin_dep_type === 'duration' ? parseInt(form.duration_mins, 10) : null,
+      duration_mins:       form.fin_dep_type === 'duration' ? parseInt(form.duration_mins, 10) : 0,
     }
 
     const { error } = session
