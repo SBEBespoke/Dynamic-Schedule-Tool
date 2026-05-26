@@ -30,23 +30,30 @@ function getDueLabel(item, onTrack, areaSessions, days) {
   const anchorLabel = item.dep_anchor === 'end' ? 'end' : 'start'
   const dirLabel = offset < 0
     ? `${Math.abs(offset)}m before`
-    : offset > 0
-      ? `${offset}m after`
-      : 'at'
+    : offset > 0 ? `${offset}m after` : 'at'
 
   if (item.dep_type === 'on_track' && item.dep_on_track_id) {
     const s = onTrack.find(x => x.id === item.dep_on_track_id)
     if (!s) return null
-    const day = days.find(d => d.id === s.day_id)
-    return `${dirLabel} ${s.category || s.name} ${anchorLabel}${day ? ` · ${day.name}` : ''}`
+    return `${dirLabel} ${s.category || s.name} ${anchorLabel}`
   }
   if (item.dep_type === 'area_session' && item.dep_area_session_id) {
     const s = areaSessions.find(x => x.id === item.dep_area_session_id)
     if (!s) return null
-    const day = days.find(d => d.id === s.day_id)
-    return `${dirLabel} ${s.name} ${anchorLabel}${day ? ` · ${day.name}` : ''}`
+    return `${dirLabel} ${s.name} ${anchorLabel}`
   }
   return null
+}
+
+function sortByDueTime(items, onTrack, areaSessions) {
+  return [...items].sort((a, b) => {
+    const dA = getDueMins(a, onTrack, areaSessions)
+    const dB = getDueMins(b, onTrack, areaSessions)
+    if (dA == null && dB == null) return a.sort_order - b.sort_order
+    if (dA == null) return 1
+    if (dB == null) return -1
+    return dA - dB
+  })
 }
 
 function nowMins() {
@@ -63,12 +70,11 @@ export default function ChecklistView() {
 
   const [items,       setItems]       = useState([])
   const [loading,     setLoading]     = useState(true)
-  const [showAdd,     setShowAdd]     = useState(false)
   const [editingItem, setEditingItem] = useState(null)
+  const [addDayId,    setAddDayId]    = useState(null) // null = modal closed
   const [saving,      setSaving]      = useState(null)
   const [now,         setNow]         = useState(nowMins())
 
-  // Refresh "now" every minute so overdue badges auto-update
   useEffect(() => {
     const t = setInterval(() => setNow(nowMins()), 60_000)
     return () => clearInterval(t)
@@ -87,7 +93,6 @@ export default function ChecklistView() {
 
   useEffect(() => { loadItems() }, [eventId])
 
-  // Real-time subscription
   useEffect(() => {
     const channel = supabase
       .channel(`checklist-${eventId}`)
@@ -122,19 +127,37 @@ export default function ChecklistView() {
     else { toast('Deleted', item.title, 'success'); loadItems() }
   }
 
-  // Ops see all items; team members only see items assigned to them
+  // Filter by user (ops see all, others see only their assigned items)
   const me = people.find(p => p.linked_user_id === profile?.id)
   const visibleItems = isOpsOrAbove ? items : items.filter(i => i.person_id === me?.id)
 
-  const done    = visibleItems.filter(i => i.completed)
-  const pending = visibleItems.filter(i => !i.completed)
-
-  const overdueCount = pending.filter(i => {
+  const totalDone    = visibleItems.filter(i => i.completed).length
+  const overdueCount = visibleItems.filter(i => {
     const due = getDueMins(i, onTrack, areaSessions)
-    return due != null && now > due
+    return due != null && !i.completed && now > due
   }).length
 
+  const sortedDays = [...days].sort((a, b) => a.sort_order - b.sort_order)
+
+  // Items grouped: per-day + general (no day_id)
+  const itemsForDay  = dayId => visibleItems.filter(i => i.day_id === dayId)
+  const generalItems = visibleItems.filter(i => !i.day_id)
+
+  // Columns = days + general if any unassigned items exist
+  const showGeneral  = generalItems.length > 0 || isOpsOrAbove
+  const columnCount  = sortedDays.length + (showGeneral ? 1 : 0)
+
   if (loading) return <div className="empty">Loading checklist…</div>
+
+  if (visibleItems.length === 0 && !isOpsOrAbove) {
+    return (
+      <div className="empty" style={{ paddingTop: 60 }}>
+        <div style={{ fontSize: 28, marginBottom: 10 }}>✅</div>
+        No checklist items assigned to you yet.
+        <br />Your ops lead will assign items as the event approaches.
+      </div>
+    )
+  }
 
   const sharedRowProps = {
     people, isOpsOrAbove, saving, onTrack, areaSessions, days, now,
@@ -146,69 +169,146 @@ export default function ChecklistView() {
   return (
     <div>
       {/* Header */}
-      <div className="sec-header" style={{ marginBottom: 16 }}>
+      <div className="sec-header" style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span className="sec-title">Event Checklist</span>
           <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
-            {done.length}/{items.length} done
+            {totalDone}/{visibleItems.length} done
           </span>
           {overdueCount > 0 && (
             <span style={overduePill}>⚠ {overdueCount} overdue</span>
           )}
-          {items.length > 0 && (
-            <div style={progressBar}>
-              <div style={progressFill(done.length / items.length)} />
+          {visibleItems.length > 0 && (
+            <div style={progressBarStyle}>
+              <div style={progressFill(totalDone / visibleItems.length)} />
             </div>
           )}
         </div>
-        {isOpsOrAbove && (
-          <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>
-            + Add Item
-          </button>
+      </div>
+
+      {/* Day columns grid */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: `repeat(${Math.max(columnCount, 1)}, minmax(220px, 1fr))`,
+        gap: 14,
+        alignItems: 'start',
+      }}>
+
+        {/* One column per event day */}
+        {sortedDays.map(day => (
+          <DayColumn
+            key={day.id}
+            label={day.name}
+            dayId={day.id}
+            items={sortByDueTime(itemsForDay(day.id), onTrack, areaSessions)}
+            isOpsOrAbove={isOpsOrAbove}
+            onAdd={() => setAddDayId(day.id)}
+            rowProps={sharedRowProps}
+            onTrack={onTrack}
+            areaSessions={areaSessions}
+            now={now}
+          />
+        ))}
+
+        {/* General column — items with no day assigned */}
+        {showGeneral && (
+          <DayColumn
+            label="General"
+            dayId={null}
+            items={sortByDueTime(generalItems, onTrack, areaSessions)}
+            isOpsOrAbove={isOpsOrAbove}
+            onAdd={() => setAddDayId('__general__')}
+            rowProps={sharedRowProps}
+            onTrack={onTrack}
+            areaSessions={areaSessions}
+            now={now}
+          />
         )}
       </div>
 
-      {visibleItems.length === 0 && (
-        <div className="empty">
-          <div style={{ fontSize: 28, marginBottom: 10 }}>✅</div>
-          {isOpsOrAbove
-            ? <>No checklist items yet.<br />Click <strong>+ Add Item</strong> to build your pre-event checklist.</>
-            : <>No checklist items assigned to you yet.<br />Your ops lead will assign items as the event approaches.</>
-          }
-        </div>
-      )}
-
-      {/* Pending items */}
-      {pending.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          {pending.map(item => (
-            <ChecklistRow key={item.id} item={item} saving={saving === item.id} {...sharedRowProps} />
-          ))}
-        </div>
-      )}
-
-      {/* Completed items */}
-      {done.length > 0 && (
-        <div>
-          <div style={sectionDivider}>Completed ({done.length})</div>
-          {done.map(item => (
-            <ChecklistRow key={item.id} item={item} saving={saving === item.id} {...sharedRowProps} />
-          ))}
-        </div>
-      )}
-
       {/* Add / Edit modal */}
-      {(showAdd || editingItem) && (
+      {(addDayId !== null || editingItem) && (
         <AddEditChecklistModal
           item={editingItem}
           eventId={eventId}
           people={people}
           onTrack={onTrack}
           areaSessions={areaSessions}
-          days={days}
-          onClose={() => { setShowAdd(false); setEditingItem(null) }}
-          onSaved={() => { setShowAdd(false); setEditingItem(null); loadItems() }}
+          days={sortedDays}
+          defaultDayId={editingItem ? undefined : (addDayId === '__general__' ? null : addDayId)}
+          onClose={() => { setAddDayId(null); setEditingItem(null) }}
+          onSaved={() => { setAddDayId(null); setEditingItem(null); loadItems() }}
         />
+      )}
+    </div>
+  )
+}
+
+// ── Day column ────────────────────────────────────────────────────────────────
+
+function DayColumn({ label, dayId, items, isOpsOrAbove, onAdd, rowProps, onTrack, areaSessions, now }) {
+  const pending   = items.filter(i => !i.completed)
+  const done      = items.filter(i => i.completed)
+  const overdue   = pending.filter(i => {
+    const due = getDueMins(i, onTrack, areaSessions)
+    return due != null && now > due
+  }).length
+
+  return (
+    <div style={columnStyle}>
+      {/* Column header */}
+      <div style={columnHeader}>
+        <span style={{ fontWeight: 800, fontSize: 12, letterSpacing: '1px', textTransform: 'uppercase' }}>
+          {label}
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {overdue > 0 && (
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#ef4444' }}>⚠ {overdue}</span>
+          )}
+          <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+            {done.length}/{items.length}
+          </span>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      {items.length > 0 && (
+        <div style={{ ...progressBarStyle, margin: '8px 0 10px', width: '100%' }}>
+          <div style={progressFill(items.length ? done.length / items.length : 0)} />
+        </div>
+      )}
+
+      {/* Pending items */}
+      {pending.map(item => (
+        <ChecklistRow key={item.id} item={item} saving={rowProps.saving === item.id} {...rowProps} compact />
+      ))}
+
+      {/* Completed items */}
+      {done.length > 0 && (
+        <>
+          <div style={doneDivider}>Done ({done.length})</div>
+          {done.map(item => (
+            <ChecklistRow key={item.id} item={item} saving={rowProps.saving === item.id} {...rowProps} compact />
+          ))}
+        </>
+      )}
+
+      {/* Empty state */}
+      {items.length === 0 && !isOpsOrAbove && (
+        <div style={{ fontSize: 12, color: 'var(--text-dim)', padding: '8px 0', textAlign: 'center' }}>
+          Nothing assigned
+        </div>
+      )}
+
+      {/* Add button */}
+      {isOpsOrAbove && (
+        <button
+          className="btn btn-ghost btn-xs"
+          onClick={onAdd}
+          style={{ width: '100%', marginTop: 8, justifyContent: 'center' }}
+        >
+          + Add Item
+        </button>
       )}
     </div>
   )
@@ -216,7 +316,7 @@ export default function ChecklistView() {
 
 // ── Checklist row ─────────────────────────────────────────────────────────────
 
-function ChecklistRow({ item, people, isOpsOrAbove, saving, onToggle, onEdit, onDelete, onTrack, areaSessions, days, now }) {
+function ChecklistRow({ item, people, isOpsOrAbove, saving, onToggle, onEdit, onDelete, onTrack, areaSessions, days, now, compact }) {
   const assignee  = people.find(p => p.id === item.person_id)
   const dueMins   = getDueMins(item, onTrack, areaSessions)
   const dueLabel  = getDueLabel(item, onTrack, areaSessions, days)
@@ -242,18 +342,20 @@ function ChecklistRow({ item, people, isOpsOrAbove, saving, onToggle, onEdit, on
       {/* Content */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
-          fontSize: 14, fontWeight: 600,
+          fontSize: compact ? 13 : 14,
+          fontWeight: 600,
           color: item.completed ? 'var(--text-dim)' : 'var(--text)',
           textDecoration: item.completed ? 'line-through' : 'none',
+          lineHeight: 1.3,
         }}>
           {item.title}
         </div>
         {item.description && (
-          <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>
             {item.description}
           </div>
         )}
-        <div style={{ display: 'flex', gap: 8, marginTop: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap', alignItems: 'center' }}>
           {assignee && (
             <span style={metaBadge()}>👤 {assignee.name}</span>
           )}
@@ -261,20 +363,20 @@ function ChecklistRow({ item, people, isOpsOrAbove, saving, onToggle, onEdit, on
             <span style={metaBadge(isOverdue ? '#ef4444' : item.completed ? 'var(--success)' : null)}>
               🕐 {fromMins(dueMins)}
               {isLinked && dueLabel && (
-                <span style={{ fontWeight: 400, marginLeft: 4, opacity: 0.8 }}>· {dueLabel}</span>
+                <span style={{ fontWeight: 400, marginLeft: 3, opacity: 0.8 }}>· {dueLabel}</span>
               )}
-              {isOverdue && <span style={{ marginLeft: 5, fontWeight: 800, letterSpacing: '0.3px' }}>OVERDUE</span>}
+              {isOverdue && <span style={{ marginLeft: 4, fontWeight: 800 }}>OVERDUE</span>}
             </span>
           )}
           {item.completed && doneAt && (
-            <span style={metaBadge('var(--success)')}>✓ Done {doneAt}</span>
+            <span style={metaBadge('var(--success)')}>✓ {doneAt}</span>
           )}
         </div>
       </div>
 
       {/* Actions */}
       {isOpsOrAbove && (
-        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
           <button className="btn btn-ghost btn-xs" onClick={() => onEdit(item)}>Edit</button>
           <button className="btn btn-danger btn-xs" onClick={() => onDelete(item)}>✕</button>
         </div>
@@ -285,7 +387,7 @@ function ChecklistRow({ item, people, isOpsOrAbove, saving, onToggle, onEdit, on
 
 // ── Add / Edit modal ──────────────────────────────────────────────────────────
 
-function AddEditChecklistModal({ item, eventId, people, onTrack, areaSessions, days, onClose, onSaved }) {
+function AddEditChecklistModal({ item, eventId, people, onTrack, areaSessions, days, defaultDayId, onClose, onSaved }) {
   const { toast } = useToast()
   const [saving, setSaving] = useState(false)
 
@@ -302,6 +404,7 @@ function AddEditChecklistModal({ item, eventId, people, onTrack, areaSessions, d
     description:          item?.description || '',
     person_id:            item?.person_id   || '',
     sort_order:           item?.sort_order  ?? 0,
+    day_id:               item?.day_id      ?? defaultDayId ?? '',
     due_mode:             initDueMode(),
     due_time:             item?.due_mins != null ? fromMins(item.due_mins) : '',
     dep_on_track_id:      item?.dep_on_track_id     || '',
@@ -313,17 +416,14 @@ function AddEditChecklistModal({ item, eventId, people, onTrack, areaSessions, d
 
   function set(key, val) { setForm(f => ({ ...f, [key]: val })) }
 
-  // Sessions grouped by day for dropdowns
-  const sortedDays = [...days].sort((a, b) => a.sort_order - b.sort_order)
-
-  const otByDay = sortedDays.map(d => ({
+  const otByDay = days.map(d => ({
     day: d,
     sessions: [...onTrack]
       .filter(s => s.day_id === d.id)
       .sort((a, b) => a.start_mins - b.start_mins),
   })).filter(g => g.sessions.length > 0)
 
-  const asByDay = sortedDays.map(d => ({
+  const asByDay = days.map(d => ({
     day: d,
     sessions: [...areaSessions]
       .filter(s => s.day_id === d.id)
@@ -334,7 +434,8 @@ function AddEditChecklistModal({ item, eventId, people, onTrack, areaSessions, d
     e.preventDefault()
     setSaving(true)
 
-    const offsetMins = (form.due_mode === 'on_track' || form.due_mode === 'area_session')
+    const isLinked = form.due_mode === 'on_track' || form.due_mode === 'area_session'
+    const offsetMins = isLinked
       ? (form.dep_offset_direction === 'before'
           ? -Math.abs(parseInt(form.dep_offset_magnitude, 10) || 0)
           :  Math.abs(parseInt(form.dep_offset_magnitude, 10) || 0))
@@ -346,6 +447,7 @@ function AddEditChecklistModal({ item, eventId, people, onTrack, areaSessions, d
       description:         form.description.trim() || null,
       person_id:           form.person_id || null,
       sort_order:          parseInt(form.sort_order, 10) || 0,
+      day_id:              form.day_id || null,
       dep_type:            form.due_mode === 'none' ? 'fixed' : form.due_mode,
       due_mins:            form.due_mode === 'fixed' && form.due_time ? toMins(form.due_time) : null,
       dep_on_track_id:     form.due_mode === 'on_track'     ? (form.dep_on_track_id     || null) : null,
@@ -390,7 +492,18 @@ function AddEditChecklistModal({ item, eventId, people, onTrack, areaSessions, d
             />
           </div>
 
-          {/* Due time mode */}
+          {/* Day */}
+          <div className="form-group">
+            <label>Event Day</label>
+            <select value={form.day_id} onChange={e => set('day_id', e.target.value)}>
+              <option value="">— General (no specific day) —</option>
+              {days.map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Due time */}
           <div className="form-group">
             <label>Due Time</label>
             <select value={form.due_mode} onChange={e => set('due_mode', e.target.value)}>
@@ -401,7 +514,6 @@ function AddEditChecklistModal({ item, eventId, people, onTrack, areaSessions, d
             </select>
           </div>
 
-          {/* Fixed time */}
           {form.due_mode === 'fixed' && (
             <div className="form-group">
               <label>Due at</label>
@@ -414,7 +526,6 @@ function AddEditChecklistModal({ item, eventId, people, onTrack, areaSessions, d
             </div>
           )}
 
-          {/* On-track session picker */}
           {form.due_mode === 'on_track' && (
             <div className="form-group">
               <label>On-Track Session</label>
@@ -437,7 +548,6 @@ function AddEditChecklistModal({ item, eventId, people, onTrack, areaSessions, d
             </div>
           )}
 
-          {/* Activation session picker */}
           {form.due_mode === 'area_session' && (
             <div className="form-group">
               <label>Activation Session</label>
@@ -458,7 +568,6 @@ function AddEditChecklistModal({ item, eventId, people, onTrack, areaSessions, d
             </div>
           )}
 
-          {/* Offset fields — shown for both linked modes */}
           {isLinkedMode && (
             <div className="form-row" style={{ alignItems: 'flex-end' }}>
               <div className="form-group" style={{ maxWidth: 90 }}>
@@ -486,7 +595,6 @@ function AddEditChecklistModal({ item, eventId, people, onTrack, areaSessions, d
             </div>
           )}
 
-          {/* Assign + order */}
           <div className="form-row">
             <div className="form-group">
               <label>Assign to <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
@@ -521,29 +629,57 @@ function AddEditChecklistModal({ item, eventId, people, onTrack, areaSessions, d
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
+const columnStyle = {
+  background: 'var(--surface)',
+  border: '1px solid var(--border)',
+  borderRadius: 10,
+  padding: '14px 12px',
+}
+
+const columnHeader = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  color: 'var(--accent)',
+  borderBottom: '2px solid var(--accent)',
+  paddingBottom: 8,
+  marginBottom: 2,
+}
+
+const doneDivider = {
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: '0.8px',
+  textTransform: 'uppercase',
+  color: 'var(--text-dim)',
+  padding: '8px 0 6px',
+  borderTop: '1px solid var(--border)',
+  marginTop: 4,
+}
+
 function rowStyle(completed, isOverdue) {
   return {
     display: 'flex',
     alignItems: 'flex-start',
-    gap: 12,
-    background: isOverdue && !completed ? 'rgba(239,68,68,0.04)' : completed ? 'transparent' : 'var(--surface)',
+    gap: 8,
+    background: isOverdue && !completed ? 'rgba(239,68,68,0.04)' : completed ? 'transparent' : 'var(--surface2)',
     border: '1px solid var(--border)',
-    borderLeft: `4px solid ${completed ? 'var(--success)' : isOverdue ? '#ef4444' : 'var(--accent)'}`,
-    borderRadius: 9,
-    padding: '11px 14px',
-    marginBottom: 8,
-    opacity: completed ? 0.6 : 1,
+    borderLeft: `3px solid ${completed ? 'var(--success)' : isOverdue ? '#ef4444' : 'var(--accent)'}`,
+    borderRadius: 7,
+    padding: '8px 10px',
+    marginBottom: 6,
+    opacity: completed ? 0.55 : 1,
     transition: 'opacity 0.2s',
   }
 }
 
 function checkBox(completed) {
   return {
-    width: 22, height: 22, flexShrink: 0,
-    borderRadius: 6,
+    width: 20, height: 20, flexShrink: 0,
+    borderRadius: 5,
     border: `2px solid ${completed ? 'var(--success)' : 'var(--border)'}`,
     background: completed ? 'var(--success)' : 'transparent',
-    color: '#fff', fontSize: 13, fontWeight: 700,
+    color: '#fff', fontSize: 11, fontWeight: 700,
     cursor: 'pointer',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     transition: 'all 0.15s',
@@ -553,13 +689,13 @@ function checkBox(completed) {
 
 function metaBadge(color) {
   return {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: color ? 600 : 400,
     color: color || 'var(--text-dim)',
-    background: 'var(--surface2)',
+    background: 'var(--surface)',
     border: `1px solid ${color ? 'currentColor' : 'var(--border)'}`,
     borderRadius: 4,
-    padding: '2px 7px',
+    padding: '1px 6px',
     display: 'inline-flex',
     alignItems: 'center',
     gap: 3,
@@ -576,19 +712,8 @@ const overduePill = {
   padding: '2px 10px',
 }
 
-const sectionDivider = {
-  fontSize: 11,
-  fontWeight: 700,
-  letterSpacing: '0.8px',
-  textTransform: 'uppercase',
-  color: 'var(--text-dim)',
-  padding: '6px 0 10px',
-  borderTop: '1px solid var(--border)',
-  marginBottom: 6,
-}
-
-const progressBar = {
-  width: 80, height: 5,
+const progressBarStyle = {
+  height: 4,
   background: 'var(--surface2)',
   borderRadius: 3,
   overflow: 'hidden',
@@ -600,6 +725,6 @@ function progressFill(ratio) {
     width: `${Math.round(ratio * 100)}%`,
     background: ratio === 1 ? 'var(--success)' : 'var(--accent)',
     borderRadius: 3,
-    transition: 'width 0.3s',
+    transition: 'width 0.4s',
   }
 }
