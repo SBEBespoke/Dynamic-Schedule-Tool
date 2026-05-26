@@ -58,7 +58,7 @@ function nowMins() {
 
 export default function ChecklistView() {
   const { eventId, people, onTrack, areaSessions, days } = useEvent()
-  const { isOpsOrAbove, user } = useAuth()
+  const { isOpsOrAbove, user, profile } = useAuth()
   const { toast } = useToast()
 
   const [items,       setItems]       = useState([])
@@ -122,8 +122,12 @@ export default function ChecklistView() {
     else { toast('Deleted', item.title, 'success'); loadItems() }
   }
 
-  const done    = items.filter(i => i.completed)
-  const pending = items.filter(i => !i.completed)
+  // Ops see all items; team members only see items assigned to them
+  const me = people.find(p => p.linked_user_id === profile?.id)
+  const visibleItems = isOpsOrAbove ? items : items.filter(i => i.person_id === me?.id)
+
+  const done    = visibleItems.filter(i => i.completed)
+  const pending = visibleItems.filter(i => !i.completed)
 
   const overdueCount = pending.filter(i => {
     const due = getDueMins(i, onTrack, areaSessions)
@@ -164,11 +168,13 @@ export default function ChecklistView() {
         )}
       </div>
 
-      {items.length === 0 && (
+      {visibleItems.length === 0 && (
         <div className="empty">
           <div style={{ fontSize: 28, marginBottom: 10 }}>✅</div>
-          No checklist items yet.
-          {isOpsOrAbove && <><br />Click <strong>+ Add Item</strong> to build your pre-event checklist.</>}
+          {isOpsOrAbove
+            ? <>No checklist items yet.<br />Click <strong>+ Add Item</strong> to build your pre-event checklist.</>
+            : <>No checklist items assigned to you yet.<br />Your ops lead will assign items as the event approaches.</>
+          }
         </div>
       )}
 
