@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment variables — NEVER commit this file
+.env
+.env.local
+.env.production
+
+# Editor
+.DS_Store
+.vscode/
+*.swp
