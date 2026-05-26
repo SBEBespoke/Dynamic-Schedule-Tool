@@ -332,7 +332,7 @@ function ChecklistRow({ item, people, isOpsOrAbove, saving, onToggle, onEdit, on
         {item.completed ? '✓' : ''}
       </button>
 
-      {/* Title */}
+      {/* Content */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
           fontSize: 13,
@@ -340,38 +340,39 @@ function ChecklistRow({ item, people, isOpsOrAbove, saving, onToggle, onEdit, on
           color: item.completed ? 'var(--text-dim)' : 'var(--text)',
           textDecoration: item.completed ? 'line-through' : 'none',
           lineHeight: 1.3,
+          marginBottom: 5,
         }}>
           {item.title}
         </div>
-      </div>
 
-      {/* Due time */}
-      {dueMins != null && (
-        <div style={{ flexShrink: 0, textAlign: 'right' }}>
-          <div style={{
-            fontSize: 13,
-            fontWeight: 700,
-            fontVariantNumeric: 'tabular-nums',
-            color: isOverdue ? '#ef4444' : isSlipped ? 'var(--warning)' : item.completed ? 'var(--success)' : 'var(--text)',
-          }}>
-            🕐 {fromMins(dueMins)}
-            {isOverdue && <span style={{ fontSize: 10, marginLeft: 4, fontWeight: 800, letterSpacing: '0.3px' }}>OVERDUE</span>}
-          </div>
-          {isSlipped && (
-            <div style={{ fontSize: 10, color: 'var(--text-dim)', textDecoration: 'line-through', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-              {fromMins(scheduledDueMins)}
-            </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {/* Due time */}
+          {dueMins != null && (
+            <span style={{
+              fontSize: 11,
+              fontWeight: 700,
+              fontVariantNumeric: 'tabular-nums',
+              color: isOverdue ? '#ef4444' : isSlipped ? 'var(--warning)' : item.completed ? 'var(--success)' : 'var(--text-dim)',
+            }}>
+              🕐 {fromMins(dueMins)}
+              {isSlipped && (
+                <span style={{ marginLeft: 5, fontWeight: 400, textDecoration: 'line-through', opacity: 0.6 }}>
+                  {fromMins(scheduledDueMins)}
+                </span>
+              )}
+              {isOverdue && <span style={{ marginLeft: 4, fontWeight: 800, letterSpacing: '0.3px' }}>OVERDUE</span>}
+            </span>
+          )}
+
+          {/* Edit / Delete */}
+          {isOpsOrAbove && (
+            <>
+              <button className="btn btn-ghost btn-xs" onClick={() => onEdit(item)}>Edit</button>
+              <button className="btn btn-danger btn-xs" onClick={() => onDelete(item)}>✕</button>
+            </>
           )}
         </div>
-      )}
-
-      {/* Actions */}
-      {isOpsOrAbove && (
-        <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
-          <button className="btn btn-ghost btn-xs" onClick={() => onEdit(item)}>Edit</button>
-          <button className="btn btn-danger btn-xs" onClick={() => onDelete(item)}>✕</button>
-        </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -659,7 +660,7 @@ function rowStyle(completed, isOverdue, isSlipped) {
     : 'var(--surface2)'
   return {
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 8,
     background: bg,
     border: '1px solid var(--border)',
