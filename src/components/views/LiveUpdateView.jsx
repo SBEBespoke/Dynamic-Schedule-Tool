@@ -76,10 +76,20 @@ export default function LiveUpdateView() {
       return
     }
 
-    // Batch update all changed sessions
-    const { error: updateError } = await supabase
-      .from('on_track_sessions')
-      .upsert(updates, { onConflict: 'id' })
+    // Update each changed session individually (avoids upsert inserting rows without event_id)
+    const results = await Promise.all(
+      updates.map(u =>
+        supabase
+          .from('on_track_sessions')
+          .update({
+            slip_mins:         u.slip_mins,
+            cascade_slip_mins: u.cascade_slip_mins,
+            duration_override: u.duration_override,
+          })
+          .eq('id', u.id)
+      )
+    )
+    const updateError = results.find(r => r.error)?.error
 
     if (updateError) {
       toast('Error', updateError.message, 'danger')
@@ -133,7 +143,19 @@ export default function LiveUpdateView() {
       updates.push({ id: session.id, slip_mins: 0, cascade_slip_mins: 0, duration_override: null })
     }
 
-    const { error } = await supabase.from('on_track_sessions').upsert(updates, { onConflict: 'id' })
+    const resetResults = await Promise.all(
+      updates.map(u =>
+        supabase
+          .from('on_track_sessions')
+          .update({
+            slip_mins:         u.slip_mins,
+            cascade_slip_mins: u.cascade_slip_mins,
+            duration_override: u.duration_override,
+          })
+          .eq('id', u.id)
+      )
+    )
+    const error = resetResults.find(r => r.error)?.error
     if (error) toast('Error', error.message, 'danger')
     else {
       await supabase.from('slip_log').insert([{
