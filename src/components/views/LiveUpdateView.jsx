@@ -9,7 +9,7 @@ import { applyCascade, getCascadeUpdates } from '../../lib/cascade'
 const QUICK_SLIPS = [5, 10, 15, 20]
 
 export default function LiveUpdateView() {
-  const { eventId, days, onTrack, slipLog, reload } = useEvent()
+  const { eventId, days, onTrack, slipLog, people, reload } = useEvent()
   const { user } = useAuth()
   const { toast } = useToast()
 
@@ -111,6 +111,35 @@ export default function LiveUpdateView() {
         note:            logNote,
         operator_id:     user?.id || null,
       }])
+    }
+
+    // ── WhatsApp notifications ─────────────────────────────────────────────────
+    // Only send when the slip time itself changed (not for duration-only edits)
+    if (slipDelta !== 0) {
+      const assignees = people.filter(p =>
+        p.people_on_track?.some(pot => pot.session_id === session.id) &&
+        p.phone_whatsapp
+      )
+      if (assignees.length > 0) {
+        const cascade      = session.cascade_slip_mins || 0
+        const newStart     = session.start_mins + newSlipMins + cascade
+        const oldStart     = session.start_mins + (session.slip_mins || 0) + cascade
+        const dayName      = sortedDays.find(d => d.id === activeDay)?.name || ''
+        const sessionLabel = session.category
+          ? `${session.category} — ${session.name}`
+          : session.name
+
+        const message = slipDelta > 0
+          ? `⚠️ *Schedule Update — ADL Grand Final*\n\n*${sessionLabel}* has slipped +${slipDelta} minutes.\n\n🕐 New start: ${fromMins(newStart)}\nWas: ${fromMins(oldStart)}\n\n📅 ${dayName}`
+          : `✅ *Schedule Recovery — ADL Grand Final*\n\n*${sessionLabel}* has recovered ${Math.abs(slipDelta)} minutes.\n\n🕐 New start: ${fromMins(newStart)}\n\n📅 ${dayName}`
+
+        const recipients = assignees.map(p => ({ name: p.name, phone: p.phone_whatsapp }))
+
+        // Fire-and-forget — don't block the UI on network latency
+        supabase.functions.invoke('send-whatsapp', { body: { recipients, message } })
+          .then(({ error }) => { if (error) console.warn('WhatsApp notify error:', error) })
+          .catch(err => console.warn('WhatsApp notify failed:', err))
+      }
     }
 
     toast(
