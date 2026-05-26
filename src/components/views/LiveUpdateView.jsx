@@ -114,31 +114,37 @@ export default function LiveUpdateView() {
     }
 
     // ── WhatsApp notifications ─────────────────────────────────────────────────
-    // Only send when the slip time itself changed (not for duration-only edits)
-    if (slipDelta !== 0) {
-      const assignees = people.filter(p =>
-        p.people_on_track?.some(pot => pot.session_id === session.id) &&
-        p.phone_whatsapp
-      )
-      if (assignees.length > 0) {
-        const cascade      = session.cascade_slip_mins || 0
-        const newStart     = session.start_mins + newSlipMins + cascade
-        const oldStart     = session.start_mins + (session.slip_mins || 0) + cascade
-        const dayName      = sortedDays.find(d => d.id === activeDay)?.name || ''
-        const sessionLabel = session.category
-          ? `${session.category} — ${session.name}`
-          : session.name
+    // Notify anyone whose session moved — including cascade-affected sessions.
+    // Each person gets one message listing all their affected sessions.
+    if (slipDelta !== 0 && updates.length > 0) {
+      const changedIds   = new Set(updates.map(u => u.id))
+      const cascadedMap  = new Map(cascaded.map(s => [s.id, s]))
+      const dayName      = sortedDays.find(d => d.id === activeDay)?.name || ''
+
+      const notifications = []
+      for (const person of people) {
+        if (!person.phone_whatsapp) continue
+        const affected = (person.people_on_track || [])
+          .map(pot => changedIds.has(pot.session_id) ? cascadedMap.get(pot.session_id) : null)
+          .filter(Boolean)
+        if (affected.length > 0) notifications.push({ person, affected })
+      }
+
+      for (const { person, affected } of notifications) {
+        const sessionLines = affected.map(s => {
+          const newStart = s.start_mins + (s.slip_mins || 0) + (s.cascade_slip_mins || 0)
+          const label    = s.category ? `${s.category} — ${s.name}` : s.name
+          return `• ${label}: ${fromMins(newStart)}`
+        }).join('\n')
 
         const message = slipDelta > 0
-          ? `⚠️ *Schedule Update — ADL Grand Final*\n\n*${sessionLabel}* has slipped +${slipDelta} minutes.\n\n🕐 New start: ${fromMins(newStart)}\nWas: ${fromMins(oldStart)}\n\n📅 ${dayName}`
-          : `✅ *Schedule Recovery — ADL Grand Final*\n\n*${sessionLabel}* has recovered ${Math.abs(slipDelta)} minutes.\n\n🕐 New start: ${fromMins(newStart)}\n\n📅 ${dayName}`
+          ? `⚠️ *Schedule Update — ADL Grand Final*\n\nThe following sessions on your schedule have moved:\n\n${sessionLines}\n\n📅 ${dayName}`
+          : `✅ *Schedule Recovery — ADL Grand Final*\n\nThe following sessions on your schedule have been updated:\n\n${sessionLines}\n\n📅 ${dayName}`
 
-        const recipients = assignees.map(p => ({ name: p.name, phone: p.phone_whatsapp }))
-
-        // Fire-and-forget — don't block the UI on network latency
-        supabase.functions.invoke('send-whatsapp', { body: { recipients, message } })
-          .then(({ error }) => { if (error) console.warn('WhatsApp notify error:', error) })
-          .catch(err => console.warn('WhatsApp notify failed:', err))
+        // Fire-and-forget — don't block the UI
+        supabase.functions.invoke('send-whatsapp', {
+          body: { recipients: [{ name: person.name, phone: person.phone_whatsapp }], message },
+        }).catch(err => console.warn('WhatsApp notify failed:', err))
       }
     }
 
