@@ -12,9 +12,9 @@ export default function MyScheduleView() {
 
   const sortedDays = [...days].sort((a, b) => a.sort_order - b.sort_order)
 
-  // Find the person record whose id matches the logged-in user's profile id
+  // Find the person record linked to the logged-in user's account
   const me = useMemo(
-    () => people.find(p => p.id === profile?.id),
+    () => people.find(p => p.linked_user_id === profile?.id),
     [people, profile]
   )
 

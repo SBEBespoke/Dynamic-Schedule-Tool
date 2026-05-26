@@ -1,28 +1,40 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useToast } from '../../context/ToastContext'
 
 export default function AddEditPersonModal({ person, eventId, onClose, onSaved }) {
   const { toast } = useToast()
-  const [saving, setSaving] = useState(false)
+  const [saving,   setSaving]   = useState(false)
+  const [profiles, setProfiles] = useState([])  // user_profiles for the link dropdown
 
   const [form, setForm] = useState({
-    name:          person?.name          || '',
+    name:           person?.name           || '',
     phone_whatsapp: person?.phone_whatsapp || '',
-    radio_channel: person?.radio_channel || '',
+    radio_channel:  person?.radio_channel  || '',
+    linked_user_id: person?.linked_user_id || '',
   })
 
   function set(key, val) { setForm(f => ({ ...f, [key]: val })) }
+
+  // Load all user profiles so ops can link a person to an account
+  useEffect(() => {
+    supabase
+      .from('user_profiles')
+      .select('id, name, role')
+      .order('name')
+      .then(({ data }) => setProfiles(data || []))
+  }, [])
 
   async function handleSave(e) {
     e.preventDefault()
     setSaving(true)
 
     const data = {
-      event_id:      eventId,
-      name:          form.name.trim(),
+      event_id:       eventId,
+      name:           form.name.trim(),
       phone_whatsapp: form.phone_whatsapp.trim() || null,
-      radio_channel: form.radio_channel.trim()  || null,
+      radio_channel:  form.radio_channel.trim()  || null,
+      linked_user_id: form.linked_user_id || null,
     }
 
     const { error } = person
@@ -65,13 +77,29 @@ export default function AddEditPersonModal({ person, eventId, onClose, onSaved }
             <span className="form-hint">Include country code. Used for slip notifications.</span>
           </div>
 
-          <div className="form-group">
+          <div className="form-group" style={{ marginBottom: 14 }}>
             <label>Radio Channel <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
             <input
               value={form.radio_channel}
               onChange={e => set('radio_channel', e.target.value)}
               placeholder="e.g. Ch 3"
             />
+          </div>
+
+          <div className="form-group">
+            <label>Link to User Account <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
+            <select
+              value={form.linked_user_id}
+              onChange={e => set('linked_user_id', e.target.value)}
+            >
+              <option value="">— not linked —</option>
+              {profiles.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.role?.replace('_', ' ')})
+                </option>
+              ))}
+            </select>
+            <span className="form-hint">Links this person to their login so they can see My Schedule.</span>
           </div>
 
           <div className="modal-footer">
