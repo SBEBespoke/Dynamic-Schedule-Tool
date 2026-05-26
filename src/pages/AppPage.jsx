@@ -2,19 +2,29 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { EventProvider, useEvent } from '../context/EventContext'
 import { useAuth } from '../context/AuthContext'
+import ScheduleView from '../components/views/ScheduleView'
+import PeopleView   from '../components/views/PeopleView'
 
-// ── Placeholder views (to be replaced in Phase 3 & 4) ──
+// ── Placeholder (for views built in Phase 3 & 4) ──
 function Placeholder({ label }) {
   return (
     <div className="empty" style={{ paddingTop: 60 }}>
       <div style={{ fontSize: 32, marginBottom: 12 }}>🚧</div>
       <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)', marginBottom: 6 }}>{label}</div>
-      <div>This view is coming in the next build phase.</div>
+      <div>Coming in the next build phase.</div>
     </div>
   )
 }
 
-// ── App shell (rendered inside EventProvider) ──
+// ── Role display labels ──
+const ROLE_LABELS = {
+  super_admin:  'Super Admin',
+  ops_lead:     'Ops Lead',
+  area_manager: 'Area Manager',
+  team_member:  'Team Member',
+}
+
+// ── Main app shell ──
 function AppShell() {
   const { event, loading, error } = useEvent()
   const { profile, role, isOpsOrAbove, isSuperAdmin, signOut } = useAuth()
@@ -23,11 +33,11 @@ function AppShell() {
   const [activeView, setView] = useState('schedule')
 
   const VIEWS = [
-    { id: 'schedule',    label: '📋 Schedule',            roles: null },           // all roles
-    { id: 'activations', label: '🎪 Activations',         roles: null },
-    { id: 'people',      label: '👥 People',              roles: ['super_admin', 'ops_lead'] },
-    { id: 'live',        label: '🚨 Live Update',         roles: ['super_admin', 'ops_lead'] },
-    { id: 'personal',    label: '📱 My Schedule',         roles: null },
+    { id: 'schedule',    label: '📋 Schedule',        roles: null },
+    { id: 'activations', label: '🎪 Activations',     roles: null },
+    { id: 'people',      label: '👥 People',          roles: ['super_admin', 'ops_lead'] },
+    { id: 'live',        label: '🚨 Live Update',     roles: ['super_admin', 'ops_lead'] },
+    { id: 'personal',    label: '📱 My Schedule',     roles: null },
   ]
 
   const visibleViews = VIEWS.filter(v => !v.roles || v.roles.includes(role))
@@ -55,11 +65,20 @@ function AppShell() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {/* Conflict badge — wired up in Phase 4 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {/* Conflict badge placeholder — wired in Phase 4 */}
           <div id="conflict-badge" style={{ display: 'none' }} />
 
-          <span style={styles.roleChip} className={`badge badge-role-${role}`}>
+          {isSuperAdmin && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => navigate(`/event/${event.id}/admin`)}
+            >
+              ⚙ Admin
+            </button>
+          )}
+
+          <span className={`badge badge-role-${role}`}>
             {ROLE_LABELS[role] || role}
           </span>
           <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>{profile?.name}</span>
@@ -72,10 +91,7 @@ function AppShell() {
         {visibleViews.map(v => (
           <button
             key={v.id}
-            style={{
-              ...styles.navBtn,
-              ...(activeView === v.id ? styles.navBtnActive : {}),
-            }}
+            style={{ ...styles.navBtn, ...(activeView === v.id ? styles.navBtnActive : {}) }}
             onClick={() => setView(v.id)}
           >
             {v.label}
@@ -85,9 +101,9 @@ function AppShell() {
 
       {/* ── VIEWS ── */}
       <main className="main">
-        {activeView === 'schedule'    && <Placeholder label="Schedule View" />}
+        {activeView === 'schedule'    && <ScheduleView />}
         {activeView === 'activations' && <Placeholder label="Activations View" />}
-        {activeView === 'people'      && isOpsOrAbove && <Placeholder label="People View" />}
+        {activeView === 'people'      && isOpsOrAbove && <PeopleView />}
         {activeView === 'live'        && isOpsOrAbove && <Placeholder label="Live Track Update View" />}
         {activeView === 'personal'    && <Placeholder label="My Schedule View" />}
       </main>
@@ -95,15 +111,6 @@ function AppShell() {
   )
 }
 
-// ── Role display labels ──
-const ROLE_LABELS = {
-  super_admin:  'Super Admin',
-  ops_lead:     'Ops Lead',
-  area_manager: 'Area Manager',
-  team_member:  'Team Member',
-}
-
-// ── Styles ──
 const styles = {
   header: {
     background: 'var(--surface)',
@@ -116,46 +123,28 @@ const styles = {
     top: 0,
     zIndex: 100,
     gap: 12,
+    flexWrap: 'wrap',
   },
   headerTitle: {
-    fontSize: '14px',
-    fontWeight: '800',
-    letterSpacing: '1.5px',
-    textTransform: 'uppercase',
-    color: 'var(--accent)',
-    lineHeight: 1,
+    fontSize: '14px', fontWeight: 800,
+    letterSpacing: '1.5px', textTransform: 'uppercase',
+    color: 'var(--accent)', lineHeight: 1,
   },
-  headerSub: {
-    fontSize: '11px',
-    color: 'var(--text-dim)',
-    marginTop: '2px',
-  },
+  headerSub: { fontSize: '11px', color: 'var(--text-dim)', marginTop: 2 },
   nav: {
-    display: 'flex',
-    background: 'var(--surface)',
-    borderBottom: '1px solid var(--border)',
-    overflowX: 'auto',
+    display: 'flex', background: 'var(--surface)',
+    borderBottom: '1px solid var(--border)', overflowX: 'auto',
   },
   navBtn: {
-    padding: '11px 18px',
-    border: 'none',
-    background: 'none',
-    color: 'var(--text-dim)',
-    fontSize: '13px',
-    fontWeight: '500',
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
+    padding: '11px 18px', border: 'none', background: 'none',
+    color: 'var(--text-dim)', fontSize: 13, fontWeight: 500,
+    cursor: 'pointer', whiteSpace: 'nowrap',
     borderBottom: '2px solid transparent',
-    transition: 'color 0.15s, border-color 0.15s',
-    letterSpacing: '0.3px',
+    transition: 'color 0.15s, border-color 0.15s', letterSpacing: '0.3px',
   },
-  navBtnActive: {
-    color: 'var(--accent)',
-    borderBottomColor: 'var(--accent)',
-  },
+  navBtnActive: { color: 'var(--accent)', borderBottomColor: 'var(--accent)' },
 }
 
-// ── Exported page wraps AppShell in EventProvider ──
 export default function AppPage() {
   return (
     <EventProvider>
