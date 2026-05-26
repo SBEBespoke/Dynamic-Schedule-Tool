@@ -31,10 +31,12 @@
 
 ---
 
-## Phase 4 — Live Operations
-- Live Track Update view — apply slips and duration overrides per session
-- Cascade engine — automatically push downstream sessions when one runs over
-- Slip log — audit trail of every adjustment made during the event
+## Phase 4 — Live Operations ✅ COMPLETE
+- Live Track Update view — quick slip buttons (+5/10/15/20m), custom input, duration override
+- Cascade engine — automatically pushes downstream sessions when one runs over
+- Activations update in real time as linked on-track sessions slip
+- Slip log — timestamped audit trail of every adjustment
+- Reset at source — cascade-only sessions show hint pointing to the upstream cause
 
 ---
 
@@ -64,6 +66,6 @@
 | 1 | Project Foundation | ✅ Complete |
 | 2 | Event & Data Management | ✅ Complete |
 | 3 | Core Views | ✅ Complete |
-| 4 | Live Operations | ⏳ Pending |
+| 4 | Live Operations | ✅ Complete |
 | 5 | Notifications & Extra Features | ⏳ Pending |
 | 6 | Export & Polish | ⏳ Pending |
