@@ -140,13 +140,15 @@ export default function ScheduleView() {
                     )}
                   </div>
 
-                  {/* Name + category */}
-                  <div className="s-name">
-                    {s.name}
-                    {s.category && <span className="s-cat">{s.category}</span>}
-                    {s.notes && (
-                      <span title={s.notes} style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-dim)', cursor: 'help' }}>📋</span>
-                    )}
+                  {/* Category (primary) + session name (support) */}
+                  <div className="s-name" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700 }}>{s.category || 'General'}</span>
+                      {s.notes && (
+                        <span title={s.notes} style={{ fontSize: 11, color: 'var(--text-dim)', cursor: 'help' }}>📋</span>
+                      )}
+                    </div>
+                    <span style={{ fontSize: 11, color: 'var(--text-dim)', fontWeight: 400 }}>{s.name}</span>
                   </div>
 
                   {/* Duration */}
