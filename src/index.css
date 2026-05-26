@@ -270,6 +270,12 @@ button { font-family: inherit; }
 /* ── DIVIDER ── */
 .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
 
+/* ── ANIMATIONS ── */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
 /* ── MOBILE ── */
 @media (max-width: 600px) {
   .main { padding: 12px; }

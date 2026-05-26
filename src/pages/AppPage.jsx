@@ -1,12 +1,14 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { EventProvider, useEvent } from '../context/EventContext'
 import { useAuth } from '../context/AuthContext'
-import ScheduleView     from '../components/views/ScheduleView'
-import ActivationsView  from '../components/views/ActivationsView'
-import PeopleView       from '../components/views/PeopleView'
+import { getConflicts, getConflictPersonIds } from '../lib/conflicts'
+import ScheduleView    from '../components/views/ScheduleView'
+import ActivationsView from '../components/views/ActivationsView'
+import PeopleView      from '../components/views/PeopleView'
+import MyScheduleView  from '../components/views/MyScheduleView'
 
-// ── Placeholder (for views built in Phase 3 & 4) ──
+// ── Placeholder (for Phase 4 views) ──
 function Placeholder({ label }) {
   return (
     <div className="empty" style={{ paddingTop: 60 }}>
@@ -27,18 +29,28 @@ const ROLE_LABELS = {
 
 // ── Main app shell ──
 function AppShell() {
-  const { event, loading, error } = useEvent()
+  const { event, loading, error, onTrack, areaSessions, people } = useEvent()
   const { profile, role, isOpsOrAbove, isSuperAdmin, signOut } = useAuth()
   const navigate = useNavigate()
 
   const [activeView, setView] = useState('schedule')
 
+  // ── Global conflict badge ──
+  const conflicts = useMemo(
+    () => getConflicts(people, onTrack, areaSessions),
+    [people, onTrack, areaSessions]
+  )
+  const conflictCount = useMemo(
+    () => getConflictPersonIds(conflicts).size,
+    [conflicts]
+  )
+
   const VIEWS = [
-    { id: 'schedule',    label: '📋 Schedule',        roles: null },
-    { id: 'activations', label: '🎪 Activations',     roles: null },
-    { id: 'people',      label: '👥 People',          roles: ['super_admin', 'ops_lead'] },
-    { id: 'live',        label: '🚨 Live Update',     roles: ['super_admin', 'ops_lead'] },
-    { id: 'personal',    label: '📱 My Schedule',     roles: null },
+    { id: 'schedule',    label: '📋 Schedule',    roles: null },
+    { id: 'activations', label: '🎪 Activations', roles: null },
+    { id: 'people',      label: '👥 People',      roles: ['super_admin', 'ops_lead'] },
+    { id: 'live',        label: '🚨 Live Update', roles: ['super_admin', 'ops_lead'] },
+    { id: 'personal',    label: '📱 My Schedule', roles: null },
   ]
 
   const visibleViews = VIEWS.filter(v => !v.roles || v.roles.includes(role))
@@ -67,8 +79,17 @@ function AppShell() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          {/* Conflict badge placeholder — wired in Phase 4 */}
-          <div id="conflict-badge" style={{ display: 'none' }} />
+
+          {/* ── Conflict badge — visible to ops+ when clashes exist ── */}
+          {isOpsOrAbove && conflictCount > 0 && (
+            <button
+              style={conflictBadgeStyle}
+              onClick={() => setView('people')}
+              title="Click to view People and resolve conflicts"
+            >
+              ⚠ {conflictCount} conflict{conflictCount > 1 ? 's' : ''}
+            </button>
+          )}
 
           {isSuperAdmin && (
             <button
@@ -106,10 +127,24 @@ function AppShell() {
         {activeView === 'activations' && <ActivationsView />}
         {activeView === 'people'      && isOpsOrAbove && <PeopleView />}
         {activeView === 'live'        && isOpsOrAbove && <Placeholder label="Live Track Update View" />}
-        {activeView === 'personal'    && <Placeholder label="My Schedule View" />}
+        {activeView === 'personal'    && <MyScheduleView />}
       </main>
     </div>
   )
+}
+
+// ── Conflict badge style — pulsing orange pill ──
+const conflictBadgeStyle = {
+  fontSize: 12,
+  fontWeight: 700,
+  color: '#ef4444',
+  background: 'rgba(239,68,68,0.12)',
+  border: '1px solid rgba(239,68,68,0.4)',
+  borderRadius: 20,
+  padding: '4px 12px',
+  cursor: 'pointer',
+  animation: 'pulse 2s ease-in-out infinite',
+  whiteSpace: 'nowrap',
 }
 
 const styles = {
