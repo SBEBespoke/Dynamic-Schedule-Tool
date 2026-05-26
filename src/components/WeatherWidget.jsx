@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { precipEmoji, precipColor } from '../lib/useWeather'
 
 // Victoria Park circuit, Adelaide
 const LAT = -34.9285
@@ -24,33 +25,85 @@ const WMO_ICONS = {
   95: '⛈️', 96: '⛈️', 99: '⛈️',
 }
 
-export default function WeatherWidget() {
-  const [weather, setWeather] = useState(null)
-  const [error,   setError]   = useState(false)
+/**
+ * WeatherWidget
+ *
+ * When `dayForecast` is provided (from useWeather's getDayWeather) it shows
+ * the predicted conditions for that event day. Otherwise it falls back to
+ * fetching and showing live current conditions.
+ *
+ * @prop {object|null} dayForecast  — { tempMin, tempMax, totalPrecip, maxPrecipProb, code }
+ * @prop {string}      dayName      — e.g. "Thursday — Practice Day"
+ */
+export default function WeatherWidget({ dayForecast = null, dayName = null }) {
+  const [live,  setLive]  = useState(null)
+  const [error, setError] = useState(false)
 
+  // Only fetch live data when no forecast is available
   useEffect(() => {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}` +
-      `&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,relative_humidity_2m` +
+    if (dayForecast) return   // forecast takes priority — skip live fetch
+
+    const url =
+      `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}` +
+      `&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,relative_humidity_2m` +
       `&wind_speed_unit=kmh&timezone=Australia%2FAdelaide`
 
     fetch(url)
       .then(r => r.json())
       .then(data => {
         const c = data.current
-        setWeather({
-          temp:       Math.round(c.temperature_2m),
-          feelsLike:  Math.round(c.apparent_temperature),
-          code:       c.weather_code,
-          wind:       Math.round(c.wind_speed_10m),
-          humidity:   c.relative_humidity_2m,
+        setLive({
+          temp:      Math.round(c.temperature_2m),
+          feelsLike: Math.round(c.apparent_temperature),
+          code:      c.weather_code,
+          wind:      Math.round(c.wind_speed_10m),
+          humidity:  c.relative_humidity_2m,
         })
       })
       .catch(() => setError(true))
-  }, [])
+  }, [!!dayForecast])
 
-  if (error) return null // fail silently — don't break the schedule view
+  if (error && !dayForecast) return null
 
-  if (!weather) {
+  // ── Forecast view (day-level prediction) ────────────────────────────────────
+  if (dayForecast) {
+    const { tempMin, tempMax, totalPrecip, maxPrecipProb, code } = dayForecast
+    const icon = WMO_ICONS[code]  || '🌡'
+    const desc = WMO_DESCRIPTIONS[code] || 'Variable'
+    const rainColor = precipColor(maxPrecipProb)
+    const rainIcon  = precipEmoji(maxPrecipProb)
+
+    return (
+      <div style={widgetStyle} title="Victoria Park, Adelaide — forecast via open-meteo.com">
+        <span style={{ fontSize: 15 }}>{icon}</span>
+
+        {/* Temp range */}
+        <span style={tempStyle}>{tempMin}–{tempMax}°C</span>
+        <span style={dimStyle}>{desc}</span>
+
+        <span style={dividerStyle} />
+
+        {/* Rain */}
+        <span style={{ ...dimStyle, color: rainColor, fontWeight: maxPrecipProb >= 30 ? 700 : 400 }}>
+          {rainIcon} {maxPrecipProb}% rain
+        </span>
+        {totalPrecip > 0 && (
+          <span style={{ ...dimStyle, color: rainColor, fontWeight: maxPrecipProb >= 30 ? 700 : 400 }}>
+            💧 {totalPrecip}mm expected
+          </span>
+        )}
+
+        <span style={dividerStyle} />
+
+        <span style={{ ...dimStyle, fontSize: 10 }}>
+          {dayName ? `${dayName} forecast` : 'Day forecast'} · Victoria Park
+        </span>
+      </div>
+    )
+  }
+
+  // ── Live / loading view ──────────────────────────────────────────────────────
+  if (!live) {
     return (
       <div style={widgetStyle}>
         <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>🌡 Loading weather…</span>
@@ -58,21 +111,23 @@ export default function WeatherWidget() {
     )
   }
 
-  const icon = WMO_ICONS[weather.code] || '🌡'
-  const desc = WMO_DESCRIPTIONS[weather.code] || 'Unknown'
+  const icon = WMO_ICONS[live.code] || '🌡'
+  const desc = WMO_DESCRIPTIONS[live.code] || 'Unknown'
 
   return (
-    <div style={widgetStyle} title="Victoria Park, Adelaide — via open-meteo.com">
+    <div style={widgetStyle} title="Victoria Park, Adelaide — live via open-meteo.com">
       <span style={{ fontSize: 15 }}>{icon}</span>
-      <span style={tempStyle}>{weather.temp}°C</span>
+      <span style={tempStyle}>{live.temp}°C</span>
       <span style={dimStyle}>{desc}</span>
-      <span style={divider} />
-      <span style={dimStyle}>💨 {weather.wind} km/h</span>
-      <span style={dimStyle}>💧 {weather.humidity}%</span>
-      <span style={{ ...dimStyle, fontSize: 10 }}>Victoria Park</span>
+      <span style={dividerStyle} />
+      <span style={dimStyle}>💨 {live.wind} km/h</span>
+      <span style={dimStyle}>💧 {live.humidity}%</span>
+      <span style={{ ...dimStyle, fontSize: 10 }}>Live · Victoria Park</span>
     </div>
   )
 }
+
+// ── Styles ────────────────────────────────────────────────────────────────────
 
 const widgetStyle = {
   display: 'flex',
@@ -97,7 +152,7 @@ const dimStyle = {
   color: 'var(--text-dim)',
 }
 
-const divider = {
+const dividerStyle = {
   width: 1,
   height: 14,
   background: 'var(--border)',

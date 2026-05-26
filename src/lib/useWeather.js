@@ -59,17 +59,15 @@ export function useWeather(days) {
   }, []) // Fetch once on mount
 
   /**
-   * Look up weather for a specific day date + session start time.
-   * @param {string|null} date     — 'YYYY-MM-DD' (from the day record)
+   * Look up weather for a specific session (point in time).
+   * @param {string|null} date      — 'YYYY-MM-DD'
    * @param {number}      startMins — minutes from midnight
-   * @returns {{ temp, precipProb, precip, code } | null}
    */
   function getWeather(date, startMins) {
     if (!date) return null
     const dayData = hourlyMap[date]
     if (!dayData) return null
     const hour = Math.floor(startMins / 60)
-    // Try exact hour, fall back to adjacent hours
     return dayData[hour]
         ?? dayData[Math.max(0, hour - 1)]
         ?? dayData[Math.min(23, hour + 1)]
@@ -77,13 +75,41 @@ export function useWeather(days) {
   }
 
   /**
-   * Returns true if a specific day's date is within the forecast window.
+   * Aggregate an entire day into a forecast summary.
+   * Returns { tempMin, tempMax, totalPrecip, maxPrecipProb, code } or null.
    */
+  function getDayWeather(date) {
+    if (!date) return null
+    const dayData = hourlyMap[date]
+    if (!dayData) return null
+
+    const entries = Object.entries(dayData).map(([h, v]) => ({ hour: Number(h), ...v }))
+    if (entries.length === 0) return null
+
+    const temps       = entries.map(e => e.temp)
+    const totalPrecip = entries.reduce((sum, e) => sum + (e.precip || 0), 0)
+    const maxPrecipProb = Math.max(...entries.map(e => e.precipProb))
+
+    // Dominant condition: worst WMO code during daytime hours (06:00–20:00)
+    const daytime     = entries.filter(e => e.hour >= 6 && e.hour <= 20)
+    const pool        = daytime.length > 0 ? daytime : entries
+    const dominantCode = pool.reduce((worst, e) => (e.code > worst ? e.code : worst), 0)
+
+    return {
+      tempMin:      Math.min(...temps),
+      tempMax:      Math.max(...temps),
+      totalPrecip:  Math.round(totalPrecip * 10) / 10,
+      maxPrecipProb,
+      code:         dominantCode,
+    }
+  }
+
+  /** Returns true if the date is within the fetched forecast window. */
   function dateInWindow(date) {
     return Boolean(date && hourlyMap[date])
   }
 
-  return { getWeather, dateInWindow, forecastAvailable }
+  return { getWeather, getDayWeather, dateInWindow, forecastAvailable }
 }
 
 // ── Display helpers ───────────────────────────────────────────────────────────

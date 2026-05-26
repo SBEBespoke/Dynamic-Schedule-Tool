@@ -11,7 +11,7 @@ import WeatherWidget      from '../WeatherWidget'
 
 export default function ScheduleView() {
   const { eventId, days, onTrack, reload } = useEvent()
-  const { getWeather, dateInWindow } = useWeather(days)
+  const { getWeather, getDayWeather, dateInWindow } = useWeather(days)
   const { isOpsOrAbove } = useAuth()
   const { toast } = useToast()
 
@@ -80,7 +80,10 @@ export default function ScheduleView() {
       </div>
 
       {/* ── Weather ── */}
-      <WeatherWidget />
+      <WeatherWidget
+        dayForecast={getDayWeather(activeDay_?.date)}
+        dayName={activeDay_?.name}
+      />
       {activeDay_?.date && !dateInWindow(activeDay_.date) && (
         <div style={{
           fontSize: 11, color: 'var(--text-dim)',
