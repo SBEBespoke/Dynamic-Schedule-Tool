@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { EventProvider, useEvent } from '../context/EventContext'
 import { useAuth } from '../context/AuthContext'
-import ScheduleView from '../components/views/ScheduleView'
-import PeopleView   from '../components/views/PeopleView'
+import ScheduleView     from '../components/views/ScheduleView'
+import ActivationsView  from '../components/views/ActivationsView'
+import PeopleView       from '../components/views/PeopleView'
 
 // ── Placeholder (for views built in Phase 3 & 4) ──
 function Placeholder({ label }) {
@@ -102,7 +103,7 @@ function AppShell() {
       {/* ── VIEWS ── */}
       <main className="main">
         {activeView === 'schedule'    && <ScheduleView />}
-        {activeView === 'activations' && <Placeholder label="Activations View" />}
+        {activeView === 'activations' && <ActivationsView />}
         {activeView === 'people'      && isOpsOrAbove && <PeopleView />}
         {activeView === 'live'        && isOpsOrAbove && <Placeholder label="Live Track Update View" />}
         {activeView === 'personal'    && <Placeholder label="My Schedule View" />}
