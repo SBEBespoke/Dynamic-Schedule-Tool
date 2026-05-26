@@ -158,13 +158,8 @@ export default function ChecklistView() {
 
   const sortedDays = [...days].sort((a, b) => a.sort_order - b.sort_order)
 
-  // Items grouped: per-day + general (no day_id)
-  const itemsForDay  = dayId => visibleItems.filter(i => i.day_id === dayId)
-  const generalItems = visibleItems.filter(i => !i.day_id)
-
-  // Columns = days + general if any unassigned items exist
-  const showGeneral  = generalItems.length > 0 || isOpsOrAbove
-  const columnCount  = sortedDays.length + (showGeneral ? 1 : 0)
+  // Items grouped per day
+  const itemsForDay = dayId => visibleItems.filter(i => i.day_id === dayId)
 
   if (loading) return <div className="empty">Loading checklist…</div>
 
@@ -205,15 +200,13 @@ export default function ChecklistView() {
         </div>
       </div>
 
-      {/* Day columns grid */}
+      {/* Day columns grid — fills full width, up to 4 columns */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: `repeat(${Math.max(columnCount, 1)}, minmax(220px, 1fr))`,
+        gridTemplateColumns: `repeat(${Math.min(Math.max(sortedDays.length, 1), 4)}, 1fr)`,
         gap: 14,
         alignItems: 'start',
       }}>
-
-        {/* One column per event day */}
         {sortedDays.map(day => (
           <DayColumn
             key={day.id}
@@ -228,21 +221,6 @@ export default function ChecklistView() {
             now={now}
           />
         ))}
-
-        {/* General column — items with no day assigned */}
-        {showGeneral && (
-          <DayColumn
-            label="General"
-            dayId={null}
-            items={sortByDueTime(generalItems, onTrack, areaSessions)}
-            isOpsOrAbove={isOpsOrAbove}
-            onAdd={() => setAddDayId('__general__')}
-            rowProps={sharedRowProps}
-            onTrack={onTrack}
-            areaSessions={areaSessions}
-            now={now}
-          />
-        )}
       </div>
 
       {/* Add / Edit modal */}
@@ -254,7 +232,7 @@ export default function ChecklistView() {
           onTrack={onTrack}
           areaSessions={areaSessions}
           days={sortedDays}
-          defaultDayId={editingItem ? undefined : (addDayId === '__general__' ? null : addDayId)}
+          defaultDayId={editingItem ? undefined : addDayId}
           onClose={() => { setAddDayId(null); setEditingItem(null) }}
           onSaved={() => { setAddDayId(null); setEditingItem(null); loadItems() }}
         />
@@ -507,9 +485,9 @@ function AddEditChecklistModal({ item, eventId, people, onTrack, areaSessions, d
 
           {/* Day */}
           <div className="form-group">
-            <label>Event Day</label>
-            <select value={form.day_id} onChange={e => set('day_id', e.target.value)}>
-              <option value="">— General (no specific day) —</option>
+            <label>Event Day *</label>
+            <select value={form.day_id} onChange={e => set('day_id', e.target.value)} required>
+              <option value="">— select a day —</option>
               {days.map(d => (
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
