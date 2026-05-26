@@ -7,6 +7,7 @@ import ScheduleView    from '../components/views/ScheduleView'
 import ActivationsView from '../components/views/ActivationsView'
 import PeopleView      from '../components/views/PeopleView'
 import MyScheduleView  from '../components/views/MyScheduleView'
+import LiveUpdateView  from '../components/views/LiveUpdateView'
 
 // ── Placeholder (for Phase 4 views) ──
 function Placeholder({ label }) {
@@ -126,7 +127,7 @@ function AppShell() {
         {activeView === 'schedule'    && <ScheduleView />}
         {activeView === 'activations' && <ActivationsView />}
         {activeView === 'people'      && isOpsOrAbove && <PeopleView />}
-        {activeView === 'live'        && isOpsOrAbove && <Placeholder label="Live Track Update View" />}
+        {activeView === 'live'        && isOpsOrAbove && <LiveUpdateView />}
         {activeView === 'personal'    && <MyScheduleView />}
       </main>
     </div>

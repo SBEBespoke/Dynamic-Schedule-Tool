@@ -76,6 +76,8 @@ button { font-family: inherit; }
 .btn-ghost:hover:not(:disabled)    { color: var(--text); border-color: var(--text-mid); }
 .btn-danger   { background: transparent; color: var(--danger); border: 1px solid rgba(239,68,68,0.3); }
 .btn-danger:hover:not(:disabled)   { background: rgba(239,68,68,0.1); border-color: var(--danger); }
+.btn-warning  { background: rgba(249,115,22,0.12); color: var(--warning); border: 1px solid rgba(249,115,22,0.3); }
+.btn-warning:hover:not(:disabled)  { background: rgba(249,115,22,0.22); border-color: var(--warning); }
 .btn-warn     { background: var(--warning); color: #000; font-weight: 700; }
 .btn-warn:hover:not(:disabled)     { background: #e06800; }
 .btn-sm  { padding: 5px 12px; font-size: 12px; }
