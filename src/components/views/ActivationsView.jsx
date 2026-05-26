@@ -141,95 +141,109 @@ export default function ActivationsView() {
         </div>
       )}
 
-      {/* ── Area panels ── */}
-      {activeDay && areas.map(area => {
-        const sessions = dayAreaSessions
-          .filter(s => s.area_id === area.id)
-          .sort((a, b) => areaStart(a, onTrack) - areaStart(b, onTrack))
+      {/* ── Area columns ── */}
+      {activeDay && (
+        <div className="activations-grid" style={columnsGrid}>
+          {areas.map(area => {
+            const sessions = dayAreaSessions
+              .filter(s => s.area_id === area.id)
+              .sort((a, b) => areaStart(a, onTrack) - areaStart(b, onTrack))
 
-        return (
-          <div key={area.id} style={areaCard(area.color)}>
+            return (
+              <div key={area.id} style={areaCard(area.color)}>
 
-            {/* Area header */}
-            <div style={areaHeaderStyle}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={colorDot(area.color)} />
-                <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{area.name}</span>
-                <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>({sessions.length})</span>
-              </div>
+                {/* Area header */}
+                <div style={areaHeaderStyle}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={colorDot(area.color)} />
+                    <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>{area.name}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>({sessions.length})</span>
+                  </div>
 
-              {isOpsOrAbove && (
-                <div style={{ display: 'flex', gap: 6 }}>
+                  {isOpsOrAbove && (
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button
+                        className="btn btn-ghost btn-xs"
+                        onClick={() => setEditingArea(area)}
+                      >Edit</button>
+                      <button
+                        className="btn btn-danger btn-xs"
+                        onClick={() => deleteArea(area)}
+                        disabled={deleting === area.id}
+                      >✕</button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Add session button */}
+                {isOpsOrAbove && (
                   <button
                     className="btn btn-ghost btn-xs"
-                    onClick={() => setEditingArea(area)}
-                  >Edit Area</button>
-                  <button
-                    className="btn btn-danger btn-xs"
-                    onClick={() => deleteArea(area)}
-                    disabled={deleting === area.id}
-                  >Delete</button>
-                  <button
-                    className="btn btn-primary btn-xs"
+                    style={{ width: '100%', marginBottom: 10, borderStyle: 'dashed' }}
                     onClick={() => setAddingSessionToArea(area)}
-                  >+ Session</button>
-                </div>
-              )}
-            </div>
+                  >+ Add Session</button>
+                )}
 
-            {/* Sessions */}
-            {sessions.length === 0 ? (
-              <div style={{ padding: '12px 0', color: 'var(--text-dim)', fontSize: 13 }}>
-                No sessions on this day.
-                {isOpsOrAbove && ' Click + Session to add one.'}
-              </div>
-            ) : (
-              sessions.map(session => {
-                const timing = timingLabel(session)
-                const dep    = depDescription(session)
-
-                return (
-                  <div key={session.id} className={`session-item ${timing.slipped ? 'slipped' : ''}`}>
-
-                    {/* Time */}
-                    <div className={`s-time ${timing.slipped ? 'slipped' : ''}`}>
-                      {timing.text}
-                      {timing.slipped && (
-                        <div style={{ fontSize: 10, color: 'var(--warning)', marginTop: 2 }}>
-                          ↓ cascaded
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Name + dep info */}
-                    <div className="s-name" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700 }}>{session.name}</span>
-                      {dep && (
-                        <span style={{ fontSize: 11, color: 'var(--text-dim)', fontWeight: 400 }}>{dep}</span>
-                      )}
-                    </div>
-
-                    {/* Actions */}
-                    {isOpsOrAbove && (
-                      <div className="s-actions">
-                        <button
-                          className="btn btn-ghost btn-xs"
-                          onClick={() => setEditingAreaSession({ session, area })}
-                        >Edit</button>
-                        <button
-                          className="btn btn-danger btn-xs"
-                          onClick={() => deleteAreaSession(session)}
-                          disabled={deleting === session.id}
-                        >✕</button>
-                      </div>
-                    )}
+                {/* Sessions */}
+                {sessions.length === 0 ? (
+                  <div style={{ color: 'var(--text-dim)', fontSize: 12, padding: '4px 0' }}>
+                    No sessions on this day.
                   </div>
-                )
-              })
-            )}
-          </div>
-        )
-      })}
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {sessions.map(session => {
+                      const timing = timingLabel(session)
+                      const dep    = depDescription(session)
+
+                      return (
+                        <div key={session.id} style={sessionCard(timing.slipped)}>
+
+                          {/* Time */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: timing.slipped ? 'var(--warning)' : 'var(--accent)', fontVariantNumeric: 'tabular-nums' }}>
+                              {timing.text}
+                            </div>
+                            {timing.slipped && (
+                              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--warning)', letterSpacing: '0.5px' }}>↓ SLIP</span>
+                            )}
+                          </div>
+
+                          {/* Name */}
+                          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: dep ? 4 : 0 }}>
+                            {session.name}
+                          </div>
+
+                          {/* Dep description */}
+                          {dep && (
+                            <div style={{ fontSize: 10, color: 'var(--text-dim)', lineHeight: 1.4 }}>
+                              {dep}
+                            </div>
+                          )}
+
+                          {/* Actions */}
+                          {isOpsOrAbove && (
+                            <div style={{ display: 'flex', gap: 4, marginTop: 8, justifyContent: 'flex-end' }}>
+                              <button
+                                className="btn btn-ghost btn-xs"
+                                onClick={() => setEditingAreaSession({ session, area })}
+                              >Edit</button>
+                              <button
+                                className="btn btn-danger btn-xs"
+                                onClick={() => deleteAreaSession(session)}
+                                disabled={deleting === session.id}
+                              >✕</button>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* ── Modals ── */}
       {(showAddArea || editingArea) && (
@@ -272,14 +286,20 @@ export default function ActivationsView() {
 
 // ── Style helpers ─────────────────────────────────────────────────────────────
 
+const columnsGrid = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(3, 1fr)',
+  gap: 12,
+  alignItems: 'start',
+}
+
 function areaCard(color) {
   return {
     background: 'var(--surface)',
     border: `1px solid ${color}55`,
-    borderLeft: `4px solid ${color}`,
+    borderTop: `3px solid ${color}`,
     borderRadius: 10,
-    padding: '14px 16px',
-    marginBottom: 16,
+    padding: '12px 14px',
   }
 }
 
@@ -287,16 +307,24 @@ const areaHeaderStyle = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  marginBottom: 12,
-  flexWrap: 'wrap',
-  gap: 8,
+  marginBottom: 8,
+  gap: 6,
 }
 
 function colorDot(color) {
   return {
-    width: 12, height: 12,
+    width: 10, height: 10,
     borderRadius: '50%',
     background: color,
     flexShrink: 0,
+  }
+}
+
+function sessionCard(slipped) {
+  return {
+    background: slipped ? 'rgba(249,115,22,0.05)' : 'var(--surface2)',
+    border: `1px solid ${slipped ? 'rgba(249,115,22,0.25)' : 'var(--border)'}`,
+    borderRadius: 7,
+    padding: '9px 11px',
   }
 }
