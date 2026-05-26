@@ -45,6 +45,25 @@ function getDueLabel(item, onTrack, areaSessions, days) {
   return null
 }
 
+// Due time with all slips zeroed — used to detect if a linked due time has moved
+function getScheduledDueMins(item, onTrack, areaSessions) {
+  if (!item.dep_type || item.dep_type === 'fixed') return item.due_mins ?? null
+  const frozenOT = onTrack.map(s => ({ ...s, slip_mins: 0, cascade_slip_mins: 0, duration_override: null }))
+  if (item.dep_type === 'on_track' && item.dep_on_track_id) {
+    const s = frozenOT.find(x => x.id === item.dep_on_track_id)
+    if (!s) return null
+    const base = item.dep_anchor === 'end' ? otEnd(s) : otStart(s)
+    return base + (item.dep_offset_mins || 0)
+  }
+  if (item.dep_type === 'area_session' && item.dep_area_session_id) {
+    const s = areaSessions.find(x => x.id === item.dep_area_session_id)
+    if (!s) return null
+    const base = item.dep_anchor === 'end' ? areaEnd(s, frozenOT) : areaStart(s, frozenOT)
+    return base + (item.dep_offset_mins || 0)
+  }
+  return null
+}
+
 function sortByDueTime(items, onTrack, areaSessions) {
   return [...items].sort((a, b) => {
     const dA = getDueMins(a, onTrack, areaSessions)
@@ -317,18 +336,14 @@ function DayColumn({ label, dayId, items, isOpsOrAbove, onAdd, rowProps, onTrack
 // ── Checklist row ─────────────────────────────────────────────────────────────
 
 function ChecklistRow({ item, people, isOpsOrAbove, saving, onToggle, onEdit, onDelete, onTrack, areaSessions, days, now, compact }) {
-  const assignee  = people.find(p => p.id === item.person_id)
-  const dueMins   = getDueMins(item, onTrack, areaSessions)
-  const dueLabel  = getDueLabel(item, onTrack, areaSessions, days)
-  const isLinked  = item.dep_type === 'on_track' || item.dep_type === 'area_session'
-  const isOverdue = dueMins != null && !item.completed && now > dueMins
-
-  const doneAt = item.completed_at
-    ? new Date(item.completed_at).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: false })
-    : null
+  const dueMins          = getDueMins(item, onTrack, areaSessions)
+  const scheduledDueMins = getScheduledDueMins(item, onTrack, areaSessions)
+  const isLinked         = item.dep_type === 'on_track' || item.dep_type === 'area_session'
+  const isSlipped        = isLinked && scheduledDueMins != null && dueMins !== scheduledDueMins
+  const isOverdue        = dueMins != null && !item.completed && now > dueMins
 
   return (
-    <div style={rowStyle(item.completed, isOverdue)}>
+    <div style={rowStyle(item.completed, isOverdue, isSlipped)}>
       {/* Checkbox */}
       <button
         onClick={() => onToggle(item)}
@@ -339,10 +354,10 @@ function ChecklistRow({ item, people, isOpsOrAbove, saving, onToggle, onEdit, on
         {item.completed ? '✓' : ''}
       </button>
 
-      {/* Content */}
+      {/* Title */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
-          fontSize: compact ? 13 : 14,
+          fontSize: 13,
           fontWeight: 600,
           color: item.completed ? 'var(--text-dim)' : 'var(--text)',
           textDecoration: item.completed ? 'line-through' : 'none',
@@ -350,29 +365,27 @@ function ChecklistRow({ item, people, isOpsOrAbove, saving, onToggle, onEdit, on
         }}>
           {item.title}
         </div>
-        {item.description && (
-          <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>
-            {item.description}
+      </div>
+
+      {/* Due time */}
+      {dueMins != null && (
+        <div style={{ flexShrink: 0, textAlign: 'right' }}>
+          <div style={{
+            fontSize: 13,
+            fontWeight: 700,
+            fontVariantNumeric: 'tabular-nums',
+            color: isOverdue ? '#ef4444' : isSlipped ? 'var(--warning)' : item.completed ? 'var(--success)' : 'var(--text)',
+          }}>
+            🕐 {fromMins(dueMins)}
+            {isOverdue && <span style={{ fontSize: 10, marginLeft: 4, fontWeight: 800, letterSpacing: '0.3px' }}>OVERDUE</span>}
           </div>
-        )}
-        <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-          {assignee && (
-            <span style={metaBadge()}>👤 {assignee.name}</span>
-          )}
-          {dueMins != null && (
-            <span style={metaBadge(isOverdue ? '#ef4444' : item.completed ? 'var(--success)' : null)}>
-              🕐 {fromMins(dueMins)}
-              {isLinked && dueLabel && (
-                <span style={{ fontWeight: 400, marginLeft: 3, opacity: 0.8 }}>· {dueLabel}</span>
-              )}
-              {isOverdue && <span style={{ marginLeft: 4, fontWeight: 800 }}>OVERDUE</span>}
-            </span>
-          )}
-          {item.completed && doneAt && (
-            <span style={metaBadge('var(--success)')}>✓ {doneAt}</span>
+          {isSlipped && (
+            <div style={{ fontSize: 10, color: 'var(--text-dim)', textDecoration: 'line-through', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+              {fromMins(scheduledDueMins)}
+            </div>
           )}
         </div>
-      </div>
+      )}
 
       {/* Actions */}
       {isOpsOrAbove && (
@@ -657,14 +670,22 @@ const doneDivider = {
   marginTop: 4,
 }
 
-function rowStyle(completed, isOverdue) {
+function rowStyle(completed, isOverdue, isSlipped) {
+  const borderColor = completed ? 'var(--success)'
+    : isOverdue  ? '#ef4444'
+    : isSlipped  ? 'var(--warning)'
+    : 'var(--accent)'
+  const bg = completed ? 'transparent'
+    : isOverdue  ? 'rgba(239,68,68,0.04)'
+    : isSlipped  ? 'rgba(249,115,22,0.04)'
+    : 'var(--surface2)'
   return {
     display: 'flex',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 8,
-    background: isOverdue && !completed ? 'rgba(239,68,68,0.04)' : completed ? 'transparent' : 'var(--surface2)',
+    background: bg,
     border: '1px solid var(--border)',
-    borderLeft: `3px solid ${completed ? 'var(--success)' : isOverdue ? '#ef4444' : 'var(--accent)'}`,
+    borderLeft: `3px solid ${borderColor}`,
     borderRadius: 7,
     padding: '8px 10px',
     marginBottom: 6,
