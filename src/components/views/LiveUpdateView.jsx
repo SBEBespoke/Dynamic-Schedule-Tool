@@ -311,8 +311,9 @@ export default function LiveUpdateView() {
                   )}
                 </div>
 
-                {/* Reset */}
-                {adjusted && (
+                {/* Reset — only on manually slipped or duration-overridden sessions.
+                    Cascade-only sessions cannot be reset independently; reset the upstream source. */}
+                {(slip !== 0 || session.duration_override != null) && (
                   <div style={{ marginTop: 6 }}>
                     <button
                       className="btn btn-ghost btn-xs"
@@ -322,6 +323,12 @@ export default function LiveUpdateView() {
                     >
                       ↺ Reset to scheduled
                     </button>
+                  </div>
+                )}
+                {/* Explain why cascaded sessions can't be reset here */}
+                {slip === 0 && cascade > 0 && session.duration_override == null && (
+                  <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 6 }}>
+                    ↑ Reset the session above that caused this cascade
                   </div>
                 )}
 
