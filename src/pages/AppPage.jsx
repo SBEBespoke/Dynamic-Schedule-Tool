@@ -8,6 +8,7 @@ import ActivationsView from '../components/views/ActivationsView'
 import PeopleView      from '../components/views/PeopleView'
 import MyScheduleView  from '../components/views/MyScheduleView'
 import LiveUpdateView  from '../components/views/LiveUpdateView'
+import ChecklistView   from '../components/views/ChecklistView'
 
 // ── Placeholder (for Phase 4 views) ──
 function Placeholder({ label }) {
@@ -52,6 +53,7 @@ function AppShell() {
     { id: 'people',      label: '👥 People',      roles: ['super_admin', 'ops_lead'] },
     { id: 'live',        label: '🚨 Live Update', roles: ['super_admin', 'ops_lead'] },
     { id: 'personal',    label: '📱 My Schedule', roles: null },
+    { id: 'checklist',   label: '✅ Checklist',   roles: null },
   ]
 
   const visibleViews = VIEWS.filter(v => !v.roles || v.roles.includes(role))
@@ -129,6 +131,7 @@ function AppShell() {
         {activeView === 'people'      && isOpsOrAbove && <PeopleView />}
         {activeView === 'live'        && isOpsOrAbove && <LiveUpdateView />}
         {activeView === 'personal'    && <MyScheduleView />}
+        {activeView === 'checklist'   && <ChecklistView />}
       </main>
     </div>
   )

@@ -6,6 +6,7 @@ import { useToast } from '../../context/ToastContext'
 import { fromMins, durStr, otStart, otEnd, otAdjusted } from '../../lib/time'
 import AddEditSessionModal from '../modals/AddEditSessionModal'
 import AddEditDayModal    from '../modals/AddEditDayModal'
+import WeatherWidget      from '../WeatherWidget'
 
 export default function ScheduleView() {
   const { eventId, days, onTrack, reload } = useEvent()
@@ -75,6 +76,9 @@ export default function ScheduleView() {
           </button>
         )}
       </div>
+
+      {/* ── Weather ── */}
+      <WeatherWidget />
 
       {/* ── No days yet ── */}
       {sortedDays.length === 0 && (

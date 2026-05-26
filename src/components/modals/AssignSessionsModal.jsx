@@ -160,6 +160,11 @@ export default function AssignSessionsModal({
                             <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
                               {fromMins(s.start_mins)} · {s.duration_mins}m
                             </div>
+                            {s.notes && (
+                              <div style={{ fontSize: 11, color: 'var(--text-mid)', marginTop: 3, fontStyle: 'italic' }}>
+                                📋 {s.notes}
+                              </div>
+                            )}
                           </div>
                           {hasConflict && <span style={conflictDot} title="Conflict">⚠</span>}
                         </label>
