@@ -4,12 +4,14 @@ import { useEvent } from '../../context/EventContext'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { fromMins, durStr, otStart, otEnd, otAdjusted } from '../../lib/time'
+import { useWeather, precipEmoji, precipColor } from '../../lib/useWeather'
 import AddEditSessionModal from '../modals/AddEditSessionModal'
 import AddEditDayModal    from '../modals/AddEditDayModal'
 import WeatherWidget      from '../WeatherWidget'
 
 export default function ScheduleView() {
   const { eventId, days, onTrack, reload } = useEvent()
+  const { getWeather, forecastAvailable } = useWeather(days)
   const { isOpsOrAbove } = useAuth()
   const { toast } = useToast()
 
@@ -79,6 +81,16 @@ export default function ScheduleView() {
 
       {/* ── Weather ── */}
       <WeatherWidget />
+      {activeDay_?.date && !forecastAvailable && (
+        <div style={{
+          fontSize: 11, color: 'var(--text-dim)',
+          background: 'var(--surface)', border: '1px solid var(--border)',
+          borderRadius: 7, padding: '6px 12px', marginBottom: 14,
+          display: 'inline-block',
+        }}>
+          🌡 Session forecasts will appear here within 16 days of the event
+        </div>
+      )}
 
       {/* ── No days yet ── */}
       {sortedDays.length === 0 && (
@@ -124,9 +136,10 @@ export default function ScheduleView() {
             </div>
           ) : (
             daySessions.map(s => {
-              const adjusted  = otAdjusted(s)
-              const startDisp = adjusted ? otStart(s) : s.start_mins
-              const endDisp   = adjusted ? otEnd(s)   : s.start_mins + s.duration_mins
+              const adjusted   = otAdjusted(s)
+              const startDisp  = adjusted ? otStart(s) : s.start_mins
+              const endDisp    = adjusted ? otEnd(s)   : s.start_mins + s.duration_mins
+              const wx         = getWeather(activeDay_?.date, s.start_mins)
 
               return (
                 <div
@@ -144,7 +157,7 @@ export default function ScheduleView() {
                     )}
                   </div>
 
-                  {/* Category (primary) + session name (support) */}
+                  {/* Category (primary) + session name (support) + weather */}
                   <div className="s-name" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ fontSize: 13, fontWeight: 700 }}>{s.category || 'General'}</span>
@@ -153,6 +166,19 @@ export default function ScheduleView() {
                       )}
                     </div>
                     <span style={{ fontSize: 11, color: 'var(--text-dim)', fontWeight: 400 }}>{s.name}</span>
+                    {wx && (
+                      <span style={{
+                        fontSize: 11,
+                        fontWeight: wx.precipProb >= 30 ? 700 : 400,
+                        color: precipColor(wx.precipProb),
+                        marginTop: 1,
+                      }}>
+                        {precipEmoji(wx.precipProb)} {wx.temp}°C
+                        {wx.precipProb > 0 && (
+                          <span> · {wx.precipProb}% rain{wx.precip > 0 ? ` (${wx.precip}mm)` : ''}</span>
+                        )}
+                      </span>
+                    )}
                   </div>
 
                   {/* Duration */}
