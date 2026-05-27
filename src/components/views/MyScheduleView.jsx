@@ -6,6 +6,16 @@ import { useToast } from '../../context/ToastContext'
 import { fromMins, durStr, otStart, otEnd } from '../../lib/time'
 import { areaStart, areaEnd, isAreaSlipped } from '../../lib/conflicts'
 
+// ── Date-aware overdue check ──────────────────────────────────────────────────
+
+// Returns true only if the day's calendar date is today or already in the past.
+// Items on future days can never be overdue regardless of their due time.
+function isDayOverduable(day) {
+  if (!day?.date) return true // no date set — fall back to time-only check
+  const today = new Date().toISOString().slice(0, 10) // 'YYYY-MM-DD'
+  return day.date <= today
+}
+
 // ── Due time helpers for checklist items ──────────────────────────────────────
 
 function getDueMins(item, onTrack, areaSessions) {
@@ -258,6 +268,7 @@ export default function MyScheduleView() {
                 <ChecklistTaskCard
                   key={`cl-${item.id}`}
                   item={item}
+                  day={day}
                   onToggle={toggleChecklist}
                   saving={savingChecklist === item.id}
                 />
@@ -307,9 +318,9 @@ export default function MyScheduleView() {
 
 // ── Checklist task card ───────────────────────────────────────────────────────
 
-function ChecklistTaskCard({ item, onToggle, saving }) {
+function ChecklistTaskCard({ item, day, onToggle, saving }) {
   const nowMins   = new Date().getHours() * 60 + new Date().getMinutes()
-  const isOverdue = !item.completed && item.start < nowMins
+  const isOverdue = !item.completed && item.start < nowMins && isDayOverduable(day)
 
   return (
     <div style={taskCard(item.completed, item.slipped, isOverdue)}>
