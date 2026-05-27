@@ -312,17 +312,19 @@ export default function LiveUpdateView() {
               {/* ── Right: controls ── */}
               <div style={controlsBlock}>
                 {/* Quick slip buttons */}
-                <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-                  {QUICK_SLIPS.map(d => (
-                    <button
-                      key={d}
-                      className="btn btn-warning btn-xs"
-                      disabled={isApplying || !!applying}
-                      onClick={() => applySlip(session, d)}
-                    >
-                      +{d}m
-                    </button>
-                  ))}
+                <div className="slip-controls" style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div className="slip-quick-btns" style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {QUICK_SLIPS.map(d => (
+                      <button
+                        key={d}
+                        className="btn btn-warning btn-xs"
+                        disabled={isApplying || !!applying}
+                        onClick={() => applySlip(session, d)}
+                      >
+                        +{d}m
+                      </button>
+                    ))}
+                  </div>
                   {/* Custom slip input */}
                   <input
                     type="number"

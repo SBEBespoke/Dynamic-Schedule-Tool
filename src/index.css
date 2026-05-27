@@ -278,13 +278,48 @@ button { font-family: inherit; }
   50%       { opacity: 0.6; }
 }
 
+/* ── RESPONSIVE VISIBILITY ── */
+.desktop-only { display: initial; }
+.mobile-only  { display: none; }
+.desktop-nav  { display: flex; }
+.mobile-nav   { display: none; }
+
 /* ── MOBILE ── */
-@media (max-width: 600px) {
-  .main { padding: 12px; }
-  .card { padding: 14px; }
-  .modal { padding: 18px; }
+@media (max-width: 640px) {
+  /* Show/hide helpers */
+  .desktop-only { display: none !important; }
+  .mobile-only  { display: initial !important; }
+  .desktop-nav  { display: none !important; }
+  .mobile-nav   { display: flex !important; }
+
+  /* Main content — extra bottom padding for the fixed bottom nav */
+  .main { padding: 12px 12px 80px; }
+
+  /* Cards & modals */
+  .card    { padding: 12px; }
+  .modal   { padding: 16px; max-height: 85vh; }
+
+  /* Session rows wrap on small screens */
   .session-item { flex-wrap: wrap; }
-  .s-actions { width: 100%; justify-content: flex-end; margin-top: 6px; }
+  .s-actions    { width: 100%; justify-content: flex-end; margin-top: 6px; }
+
+  /* Bigger touch targets for xs buttons */
+  .btn-xs { padding: 7px 12px; font-size: 12px; }
+  .btn-sm { padding: 8px 14px; }
+
+  /* Day tabs — scrollable, no wrap */
+  .day-tabs    { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+  .day-tab     { flex-shrink: 0; }
+
+  /* Section headers stack on small screens */
+  .sec-header  { flex-wrap: wrap; gap: 8px; }
+
+  /* Checklist: 1 column on mobile */
+  .checklist-grid { grid-template-columns: 1fr !important; }
+
+  /* Live Update slip controls: stack vertically */
+  .slip-controls { flex-direction: column; align-items: flex-start; }
+  .slip-quick-btns { flex-wrap: wrap; }
 }
 
 @media (max-width: 900px) {

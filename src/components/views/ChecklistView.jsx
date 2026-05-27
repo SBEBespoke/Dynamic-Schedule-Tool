@@ -200,8 +200,8 @@ export default function ChecklistView() {
         </div>
       </div>
 
-      {/* Day columns grid — fills full width, up to 4 columns */}
-      <div style={{
+      {/* Day columns grid — fills full width, up to 4 columns; collapses to 1 on mobile */}
+      <div className="checklist-grid" style={{
         display: 'grid',
         gridTemplateColumns: `repeat(${Math.min(Math.max(sortedDays.length, 1), 4)}, 1fr)`,
         gap: 14,

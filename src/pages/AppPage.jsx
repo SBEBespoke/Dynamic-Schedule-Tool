@@ -48,12 +48,12 @@ function AppShell() {
   )
 
   const VIEWS = [
-    { id: 'schedule',    label: '📋 Schedule',    roles: null },
-    { id: 'activations', label: '🎪 Activations', roles: null },
-    { id: 'people',      label: '👥 People',      roles: ['super_admin', 'ops_lead'] },
-    { id: 'live',        label: '🚨 Live Update', roles: ['super_admin', 'ops_lead'] },
-    { id: 'personal',    label: '📱 My Schedule', roles: null },
-    { id: 'checklist',   label: '✅ Checklist',   roles: null },
+    { id: 'schedule',    label: '📋 Schedule',    short: 'Schedule',    roles: null },
+    { id: 'activations', label: '🎪 Activations', short: 'Areas',       roles: null },
+    { id: 'people',      label: '👥 People',      short: 'People',      roles: ['super_admin', 'ops_lead'] },
+    { id: 'live',        label: '🚨 Live Update', short: 'Live',        roles: ['super_admin', 'ops_lead'] },
+    { id: 'personal',    label: '📱 My Schedule', short: 'Mine',        roles: null },
+    { id: 'checklist',   label: '✅ Checklist',   short: 'Tasks',       roles: null },
   ]
 
   const visibleViews = VIEWS.filter(v => !v.roles || v.roles.includes(role))
@@ -69,7 +69,7 @@ function AppShell() {
       <div style={styles.header}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <button
-            className="btn btn-ghost btn-sm"
+            className="btn btn-ghost btn-sm desktop-only"
             onClick={() => navigate('/events')}
             style={{ padding: '5px 10px' }}
           >
@@ -77,42 +77,44 @@ function AppShell() {
           </button>
           <div>
             <div style={styles.headerTitle}>{event.name}</div>
-            {event.venue && <div style={styles.headerSub}>📍 {event.venue}</div>}
+            {event.venue && <div style={styles.headerSub + ' desktop-only'}>📍 {event.venue}</div>}
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-
-          {/* ── Conflict badge — visible to ops+ when clashes exist ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* Conflict badge */}
           {isOpsOrAbove && conflictCount > 0 && (
             <button
               style={conflictBadgeStyle}
               onClick={() => setView('people')}
               title="Click to view People and resolve conflicts"
             >
-              ⚠ {conflictCount} conflict{conflictCount > 1 ? 's' : ''}
+              ⚠ {conflictCount}
             </button>
           )}
-
           {isSuperAdmin && (
             <button
               className="btn btn-ghost btn-sm"
               onClick={() => navigate(`/event/${event.id}/admin`)}
             >
-              ⚙ Admin
+              ⚙ <span className="desktop-only">Admin</span>
             </button>
           )}
-
-          <span className={`badge badge-role-${role}`}>
+          <span className={`badge badge-role-${role} desktop-only`}>
             {ROLE_LABELS[role] || role}
           </span>
-          <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>{profile?.name}</span>
-          <button className="btn btn-ghost btn-sm" onClick={signOut}>Sign Out</button>
+          <span style={{ fontSize: 13, color: 'var(--text-dim)' }} className="desktop-only">
+            {profile?.name}
+          </span>
+          <button className="btn btn-ghost btn-sm" onClick={signOut}>
+            <span className="desktop-only">Sign Out</span>
+            <span className="mobile-only">✕</span>
+          </button>
         </div>
       </div>
 
-      {/* ── NAV ── */}
-      <nav style={styles.nav}>
+      {/* ── DESKTOP NAV (top tabs) ── */}
+      <nav style={styles.nav} className="desktop-nav">
         {visibleViews.map(v => (
           <button
             key={v.id}
@@ -120,6 +122,22 @@ function AppShell() {
             onClick={() => setView(v.id)}
           >
             {v.label}
+          </button>
+        ))}
+      </nav>
+
+      {/* ── MOBILE NAV (bottom tabs) ── */}
+      <nav style={styles.mobileNav} className="mobile-nav">
+        {visibleViews.map(v => (
+          <button
+            key={v.id}
+            style={{ ...styles.mobileNavBtn, ...(activeView === v.id ? styles.mobileNavBtnActive : {}) }}
+            onClick={() => setView(v.id)}
+          >
+            <span style={{ fontSize: 20, lineHeight: 1 }}>{v.label.split(' ')[0]}</span>
+            <span style={{ fontSize: 10, marginTop: 2, fontWeight: activeView === v.id ? 700 : 400 }}>
+              {v.short}
+            </span>
           </button>
         ))}
       </nav>
@@ -163,7 +181,6 @@ const styles = {
     top: 0,
     zIndex: 100,
     gap: 12,
-    flexWrap: 'wrap',
   },
   headerTitle: {
     fontSize: '14px', fontWeight: 800,
@@ -183,6 +200,24 @@ const styles = {
     transition: 'color 0.15s, border-color 0.15s', letterSpacing: '0.3px',
   },
   navBtnActive: { color: 'var(--accent)', borderBottomColor: 'var(--accent)' },
+  mobileNav: {
+    position: 'fixed', bottom: 0, left: 0, right: 0,
+    background: 'var(--surface)',
+    borderTop: '1px solid var(--border)',
+    display: 'flex',
+    zIndex: 200,
+    paddingBottom: 'env(safe-area-inset-bottom)', // iPhone notch support
+  },
+  mobileNavBtn: {
+    flex: 1, border: 'none', background: 'none',
+    color: 'var(--text-dim)', cursor: 'pointer',
+    display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'center',
+    padding: '8px 4px',
+    transition: 'color 0.15s',
+    minHeight: 56,
+  },
+  mobileNavBtnActive: { color: 'var(--accent)' },
 }
 
 export default function AppPage() {
