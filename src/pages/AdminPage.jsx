@@ -6,8 +6,9 @@ import { EventProvider, useEvent } from '../context/EventContext'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { toMins } from '../lib/time'
+import UsersTab from '../components/admin/UsersTab'
 
-const TABS = ['Event Config', 'Excel Import']
+const TABS = ['Event Config', 'Excel Import', 'Users']
 
 function AdminShell() {
   const navigate = useNavigate()
@@ -53,6 +54,7 @@ function AdminShell() {
       <main className="main" style={{ maxWidth: 800 }}>
         {activeTab === 'Event Config' && <EventConfig event={event} eventId={eventId} reload={reload} />}
         {activeTab === 'Excel Import' && <ExcelImport eventId={eventId} days={days} reload={reload} />}
+        {activeTab === 'Users'        && <UsersTab />}
       </main>
     </div>
   )
