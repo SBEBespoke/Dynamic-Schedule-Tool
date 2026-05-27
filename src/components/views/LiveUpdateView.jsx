@@ -137,21 +137,49 @@ export default function LiveUpdateView() {
           .filter(pot => changedIds.has(pot.session_id))
           .map(pot => {
             const s        = cascadedMap.get(pot.session_id)
+            if (!s) return null
             const newStart = s.start_mins + (s.slip_mins || 0) + (s.cascade_slip_mins || 0)
+            // Old start from pre-cascade onTrack data
+            const sOrig    = onTrack.find(o => o.id === pot.session_id)
+            const oldStart = sOrig
+              ? sOrig.start_mins + (sOrig.slip_mins || 0) + (sOrig.cascade_slip_mins || 0)
+              : null
             const label    = s.category ? `${s.category} — ${s.name}` : s.name
-            return `• ${label}: ${fromMins(newStart)}`
+            const timeStr  = oldStart != null && oldStart !== newStart
+              ? `${fromMins(oldStart)} → ${fromMins(newStart)}`
+              : fromMins(newStart)
+            return `• ${label}: ${timeStr}`
           })
+          .filter(Boolean)
 
         // Activations this person is assigned to that moved
         const areaLines = (person.people_area_sessions || [])
           .filter(pas => affectedAreaIds.has(pas.area_session_id))
           .map(pas => {
-            const as       = affectedAreaMap.get(pas.area_session_id)
-            const linked   = cascadedMap.get(as.dep_session_id)
-            const newStart = linked
-              ? (linked.start_mins + (linked.slip_mins || 0) + (linked.cascade_slip_mins || 0)) + (as.dep_offset_mins || 0)
-              : as.start_mins
-            return `• ${as.name}: ${fromMins(newStart)}`
+            const as     = affectedAreaMap.get(pas.area_session_id)
+            const linked = cascadedMap.get(as.dep_session_id)
+            if (linked) {
+              // New start: END of linked session + offset (matches areaStart() in conflicts.js)
+              const linkedNewStart = linked.start_mins + (linked.slip_mins || 0) + (linked.cascade_slip_mins || 0)
+              const linkedDur      = linked.duration_override ?? linked.duration_mins
+              const linkedNewEnd   = linkedNewStart + linkedDur
+              const newStart       = linkedNewEnd + (as.dep_offset_mins || 0)
+              // Old start from pre-cascade onTrack data
+              const linkedOrig     = onTrack.find(o => o.id === linked.id)
+              let oldStart = null
+              if (linkedOrig) {
+                const linkedOldStart = linkedOrig.start_mins + (linkedOrig.slip_mins || 0) + (linkedOrig.cascade_slip_mins || 0)
+                const linkedOldDur   = linkedOrig.duration_override ?? linkedOrig.duration_mins
+                oldStart = linkedOldStart + linkedOldDur + (as.dep_offset_mins || 0)
+              }
+              const timeStr = oldStart != null && oldStart !== newStart
+                ? `${fromMins(oldStart)} → ${fromMins(newStart)}`
+                : fromMins(newStart)
+              return `• ${as.name}: ${timeStr}`
+            } else {
+              // Fixed start time — no linked session to derive from
+              return `• ${as.name}: ${fromMins(as.start_mins)}`
+            }
           })
 
         const allLines = [...onTrackLines, ...areaLines]
