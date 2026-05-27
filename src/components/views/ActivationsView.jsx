@@ -163,12 +163,16 @@ export default function ActivationsView() {
       {/* ── Area columns ── */}
       {activeDay && (
         <div className="activations-grid" style={columnsGrid}>
-          {areas.map(area => {
-            const sessions = dayAreaSessions
-              .filter(s => s.area_id === area.id)
-              .sort((a, b) => areaStart(a, onTrack) - areaStart(b, onTrack))
+          {[0, 1, 2].map(colIdx => (
+            <div key={colIdx} style={columnStyle}>
+              {areas
+                .filter((_, i) => i % 3 === colIdx)
+                .map(area => {
+                  const sessions = dayAreaSessions
+                    .filter(s => s.area_id === area.id)
+                    .sort((a, b) => areaStart(a, onTrack) - areaStart(b, onTrack))
 
-            return (
+                  return (
               <div key={area.id} style={areaCard(area.color)}>
 
                 {/* Area header */}
@@ -271,9 +275,11 @@ export default function ActivationsView() {
                     })}
                   </div>
                 )}
-              </div>
-            )
-          })}
+                  </div>
+                  )
+                })}
+            </div>
+          ))}
         </div>
       )}
 
@@ -319,10 +325,17 @@ export default function ActivationsView() {
 // ── Style helpers ─────────────────────────────────────────────────────────────
 
 const columnsGrid = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(3, 1fr)',
-  gap: 12,
-  alignItems: 'start',
+  display: 'flex',
+  gap:     12,
+  alignItems: 'flex-start',
+}
+
+const columnStyle = {
+  flex:          1,
+  display:       'flex',
+  flexDirection: 'column',
+  gap:           12,
+  minWidth:      0,
 }
 
 function areaCard(color) {
