@@ -81,6 +81,14 @@ function nowMins() {
   return n.getHours() * 60 + n.getMinutes()
 }
 
+// Returns true only if the day's calendar date is today or already in the past.
+// Items on future days can never be overdue regardless of their due time.
+function isDayOverduable(day) {
+  if (!day?.date) return true // no date set — fall back to time-only check
+  const today = new Date().toISOString().slice(0, 10) // 'YYYY-MM-DD'
+  return day.date <= today
+}
+
 // ── Main view ─────────────────────────────────────────────────────────────────
 
 export default function ChecklistView() {
@@ -153,12 +161,14 @@ export default function ChecklistView() {
   const visibleItems = isOpsOrAbove ? items : items.filter(i => i.person_id === me?.id)
 
   const totalDone    = visibleItems.filter(i => i.completed).length
-  const overdueCount = visibleItems.filter(i => {
-    const due = getDueMins(i, onTrack, areaSessions)
-    return due != null && !i.completed && now > due
-  }).length
 
   const sortedDays = [...days].sort((a, b) => a.sort_order - b.sort_order)
+
+  const overdueCount = visibleItems.filter(i => {
+    const due    = getDueMins(i, onTrack, areaSessions)
+    const itemDay = sortedDays.find(d => d.id === i.day_id)
+    return due != null && !i.completed && now > due && isDayOverduable(itemDay)
+  }).length
 
   // Items grouped per day
   const itemsForDay = dayId => visibleItems.filter(i => i.day_id === dayId)
@@ -212,8 +222,7 @@ export default function ChecklistView() {
         {sortedDays.map(day => (
           <DayColumn
             key={day.id}
-            label={day.name}
-            dayId={day.id}
+            day={day}
             items={sortByDueTime(itemsForDay(day.id), onTrack, areaSessions)}
             isOpsOrAbove={isOpsOrAbove}
             me={me}
@@ -248,12 +257,13 @@ export default function ChecklistView() {
 
 // ── Day column ────────────────────────────────────────────────────────────────
 
-function DayColumn({ label, dayId, items, isOpsOrAbove, me, onAdd, rowProps, onTrack, areaSessions, now }) {
-  const pending   = items.filter(i => !i.completed)
-  const done      = items.filter(i => i.completed)
-  const overdue   = pending.filter(i => {
+function DayColumn({ day, items, isOpsOrAbove, me, onAdd, rowProps, onTrack, areaSessions, now }) {
+  const pending        = items.filter(i => !i.completed)
+  const done           = items.filter(i => i.completed)
+  const dayOverduable  = isDayOverduable(day)
+  const overdue        = pending.filter(i => {
     const due = getDueMins(i, onTrack, areaSessions)
-    return due != null && now > due
+    return due != null && now > due && dayOverduable
   }).length
 
   return (
@@ -261,7 +271,7 @@ function DayColumn({ label, dayId, items, isOpsOrAbove, me, onAdd, rowProps, onT
       {/* Column header */}
       <div style={columnHeader}>
         <span style={{ fontWeight: 800, fontSize: 12, letterSpacing: '1px', textTransform: 'uppercase' }}>
-          {label}
+          {day.name}
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {overdue > 0 && (
@@ -324,7 +334,8 @@ function ChecklistRow({ item, people, isOpsOrAbove, me, saving, onToggle, onEdit
   const scheduledDueMins = getScheduledDueMins(item, onTrack, areaSessions)
   const isLinked         = item.dep_type === 'on_track' || item.dep_type === 'area_session'
   const isSlipped        = isLinked && scheduledDueMins != null && dueMins !== scheduledDueMins
-  const isOverdue        = dueMins != null && !item.completed && now > dueMins
+  const itemDay          = days?.find(d => d.id === item.day_id)
+  const isOverdue        = dueMins != null && !item.completed && now > dueMins && isDayOverduable(itemDay)
 
   return (
     <div style={rowStyle(item.completed, isOverdue, isSlipped)}>
