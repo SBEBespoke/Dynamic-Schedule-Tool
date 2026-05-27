@@ -9,7 +9,7 @@ import { applyCascade, getCascadeUpdates } from '../../lib/cascade'
 const QUICK_SLIPS = [5, 10, 15, 20]
 
 export default function LiveUpdateView() {
-  const { eventId, days, onTrack, slipLog, people, reload } = useEvent()
+  const { eventId, days, onTrack, areaSessions, slipLog, people, reload } = useEvent()
   const { user } = useAuth()
   const { toast } = useToast()
 
@@ -114,36 +114,54 @@ export default function LiveUpdateView() {
     }
 
     // ── WhatsApp notifications ─────────────────────────────────────────────────
-    // Notify anyone whose session moved — including cascade-affected sessions.
+    // Notify anyone whose session moved — on-track OR linked activation.
     // Each person gets one message listing all their affected sessions.
     if (slipDelta !== 0 && updates.length > 0) {
-      const changedIds   = new Set(updates.map(u => u.id))
-      const cascadedMap  = new Map(cascaded.map(s => [s.id, s]))
-      const dayName      = sortedDays.find(d => d.id === activeDay)?.name || ''
+      const changedIds  = new Set(updates.map(u => u.id))
+      const cascadedMap = new Map(cascaded.map(s => [s.id, s]))
+      const dayName     = sortedDays.find(d => d.id === activeDay)?.name || ''
 
-      // DEBUG — remove after testing
-      console.log('[WA] changedIds:', [...changedIds])
-      console.log('[WA] on_track session IDs:', people.filter(p => p.phone_whatsapp).flatMap(p => (p.people_on_track || []).map(x => x.session_id)))
+      // Activations whose start is driven by a changed on-track session
+      const affectedAreas   = areaSessions.filter(as =>
+        as.dep_type === 'after' && changedIds.has(as.dep_session_id)
+      )
+      const affectedAreaIds = new Set(affectedAreas.map(as => as.id))
+      const affectedAreaMap = new Map(affectedAreas.map(as => [as.id, as]))
 
       const notifications = []
       for (const person of people) {
         if (!person.phone_whatsapp) continue
-        const affected = (person.people_on_track || [])
-          .map(pot => changedIds.has(pot.session_id) ? cascadedMap.get(pot.session_id) : null)
-          .filter(Boolean)
-        if (affected.length > 0) notifications.push({ person, affected })
+
+        // On-track sessions this person is assigned to that moved
+        const onTrackLines = (person.people_on_track || [])
+          .filter(pot => changedIds.has(pot.session_id))
+          .map(pot => {
+            const s        = cascadedMap.get(pot.session_id)
+            const newStart = s.start_mins + (s.slip_mins || 0) + (s.cascade_slip_mins || 0)
+            const label    = s.category ? `${s.category} — ${s.name}` : s.name
+            return `• ${label}: ${fromMins(newStart)}`
+          })
+
+        // Activations this person is assigned to that moved
+        const areaLines = (person.people_area_sessions || [])
+          .filter(pas => affectedAreaIds.has(pas.area_session_id))
+          .map(pas => {
+            const as       = affectedAreaMap.get(pas.area_session_id)
+            const linked   = cascadedMap.get(as.dep_session_id)
+            const newStart = linked
+              ? (linked.start_mins + (linked.slip_mins || 0) + (linked.cascade_slip_mins || 0)) + (as.dep_offset_mins || 0)
+              : as.start_mins
+            return `• ${as.name}: ${fromMins(newStart)}`
+          })
+
+        const allLines = [...onTrackLines, ...areaLines]
+        if (allLines.length > 0) notifications.push({ person, allLines })
       }
 
-      for (const { person, affected } of notifications) {
-        const sessionLines = affected.map(s => {
-          const newStart = s.start_mins + (s.slip_mins || 0) + (s.cascade_slip_mins || 0)
-          const label    = s.category ? `${s.category} — ${s.name}` : s.name
-          return `• ${label}: ${fromMins(newStart)}`
-        }).join('\n')
-
+      for (const { person, allLines } of notifications) {
         const message = slipDelta > 0
-          ? `⚠️ *Schedule Update — ADL Grand Final*\n\nThe following sessions on your schedule have moved:\n\n${sessionLines}\n\n📅 ${dayName}`
-          : `✅ *Schedule Recovery — ADL Grand Final*\n\nThe following sessions on your schedule have been updated:\n\n${sessionLines}\n\n📅 ${dayName}`
+          ? `⚠️ *Schedule Update — ADL Grand Final*\n\nThe following sessions on your schedule have moved:\n\n${allLines.join('\n')}\n\n📅 ${dayName}`
+          : `✅ *Schedule Recovery — ADL Grand Final*\n\nThe following sessions on your schedule have been updated:\n\n${allLines.join('\n')}\n\n📅 ${dayName}`
 
         // Fire-and-forget — don't block the UI
         supabase.functions.invoke('send-whatsapp', {
