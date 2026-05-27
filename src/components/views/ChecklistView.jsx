@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useEvent } from '../../context/EventContext'
 import { useAuth } from '../../context/AuthContext'
+import { useViewAuth } from '../../context/ViewContext'
 import { useToast } from '../../context/ToastContext'
 import { fromMins, toMins, otStart, otEnd } from '../../lib/time'
 import { areaStart, areaEnd } from '../../lib/conflicts'
@@ -84,7 +85,8 @@ function nowMins() {
 
 export default function ChecklistView() {
   const { eventId, people, onTrack, areaSessions, days } = useEvent()
-  const { isOpsOrAbove, user, profile } = useAuth()
+  const { user, profile } = useAuth()
+  const { effectiveIsOpsOrAbove: isOpsOrAbove } = useViewAuth()
   const { toast } = useToast()
 
   const [items,       setItems]       = useState([])

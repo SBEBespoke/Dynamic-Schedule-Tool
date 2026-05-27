@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useEvent } from '../../context/EventContext'
 import { useAuth } from '../../context/AuthContext'
+import { useViewAuth } from '../../context/ViewContext'
 import { useToast } from '../../context/ToastContext'
 import { fromMins, durStr, otStart, otEnd, otAdjusted } from '../../lib/time'
 import { useWeather, precipEmoji, precipColor } from '../../lib/useWeather'
@@ -12,7 +13,8 @@ import WeatherWidget      from '../WeatherWidget'
 export default function ScheduleView() {
   const { eventId, days, onTrack, people, reload } = useEvent()
   const { getWeather, getDayWeather, dateInWindow } = useWeather(days)
-  const { isOpsOrAbove, isSuperAdmin, profile } = useAuth()
+  const { profile } = useAuth()
+  const { effectiveIsOpsOrAbove: isOpsOrAbove, effectiveIsSuperAdmin: isSuperAdmin } = useViewAuth()
   const { toast } = useToast()
 
   const me = people.find(p => p.linked_user_id === profile?.id)

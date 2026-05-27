@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useEvent } from '../../context/EventContext'
 import { useAuth } from '../../context/AuthContext'
+import { useViewAuth } from '../../context/ViewContext'
 import { useToast } from '../../context/ToastContext'
 import { fromMins, durStr } from '../../lib/time'
 import { areaStart, areaEnd, isAreaSlipped } from '../../lib/conflicts'
@@ -10,7 +11,8 @@ import AddEditAreaSessionModal from '../modals/AddEditAreaSessionModal'
 
 export default function ActivationsView() {
   const { eventId, days, onTrack, areas, areaSessions, people, reload } = useEvent()
-  const { isOpsOrAbove, isSuperAdmin, profile } = useAuth()
+  const { profile } = useAuth()
+  const { effectiveIsSuperAdmin: isSuperAdmin } = useViewAuth()
   const { toast } = useToast()
 
   const me = people.find(p => p.linked_user_id === profile?.id)

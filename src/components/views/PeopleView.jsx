@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useEvent } from '../../context/EventContext'
 import { useAuth } from '../../context/AuthContext'
+import { useViewAuth } from '../../context/ViewContext'
 import { useToast } from '../../context/ToastContext'
 import { getConflicts, getConflictPersonIds } from '../../lib/conflicts'
 import AddEditPersonModal  from '../modals/AddEditPersonModal'
@@ -9,7 +10,8 @@ import AssignSessionsModal from '../modals/AssignSessionsModal'
 
 export default function PeopleView() {
   const { eventId, days, onTrack, areas, areaSessions, people, reload } = useEvent()
-  const { isOpsOrAbove, isSuperAdmin } = useAuth()
+  useAuth() // keep subscription alive
+  const { effectiveIsOpsOrAbove: isOpsOrAbove, effectiveIsSuperAdmin: isSuperAdmin } = useViewAuth()
   const { toast } = useToast()
 
   const [search,          setSearch]          = useState('')

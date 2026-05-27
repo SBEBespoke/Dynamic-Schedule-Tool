@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { EventProvider, useEvent } from '../context/EventContext'
 import { useAuth } from '../context/AuthContext'
+import { ViewProvider } from '../context/ViewContext'
 import { getConflicts, getConflictPersonIds } from '../lib/conflicts'
 import ScheduleView         from '../components/views/ScheduleView'
 import ScheduleViewReadOnly from '../components/views/ScheduleViewReadOnly'
@@ -200,16 +201,22 @@ function AppShell() {
         ))}
       </nav>
 
-      {/* ── VIEWS ── */}
-      <main className="main">
-        {activeView === 'schedule_ro'   && <ScheduleViewReadOnly />}
-        {activeView === 'activations'   && <ActivationsView />}
-        {activeView === 'people'        && effectiveIsOpsOrAbove && <PeopleView />}
-        {activeView === 'live'          && effectiveIsOpsOrAbove && <LiveUpdateView />}
-        {activeView === 'personal'      && <MyScheduleView />}
-        {activeView === 'checklist'     && <ChecklistView />}
-        {activeView === 'schedule_edit' && effectiveIsOpsOrAbove && <ScheduleView />}
-      </main>
+      {/* ── VIEWS — wrapped in ViewProvider so child views see the effective role ── */}
+      <ViewProvider value={{
+        effectiveRole:         effectiveRole,
+        effectiveIsSuperAdmin: effectiveRole === 'super_admin',
+        effectiveIsOpsOrAbove: effectiveIsOpsOrAbove,
+      }}>
+        <main className="main">
+          {activeView === 'schedule_ro'   && <ScheduleViewReadOnly />}
+          {activeView === 'activations'   && <ActivationsView />}
+          {activeView === 'people'        && effectiveIsOpsOrAbove && <PeopleView />}
+          {activeView === 'live'          && effectiveIsOpsOrAbove && <LiveUpdateView />}
+          {activeView === 'personal'      && <MyScheduleView />}
+          {activeView === 'checklist'     && <ChecklistView />}
+          {activeView === 'schedule_edit' && effectiveIsOpsOrAbove && <ScheduleView />}
+        </main>
+      </ViewProvider>
     </div>
   )
 }
