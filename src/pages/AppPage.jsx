@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { EventProvider, useEvent } from '../context/EventContext'
 import { useAuth } from '../context/AuthContext'
 import { getConflicts, getConflictPersonIds } from '../lib/conflicts'
-import ScheduleView    from '../components/views/ScheduleView'
-import ActivationsView from '../components/views/ActivationsView'
+import ScheduleView         from '../components/views/ScheduleView'
+import ScheduleViewReadOnly from '../components/views/ScheduleViewReadOnly'
+import ActivationsView      from '../components/views/ActivationsView'
 import PeopleView      from '../components/views/PeopleView'
 import MyScheduleView  from '../components/views/MyScheduleView'
 import LiveUpdateView  from '../components/views/LiveUpdateView'
@@ -35,7 +36,7 @@ function AppShell() {
   const { profile, role, isOpsOrAbove, isSuperAdmin, signOut } = useAuth()
   const navigate = useNavigate()
 
-  const [activeView, setView] = useState('schedule')
+  const [activeView, setView] = useState('schedule_ro')
 
   // ── Global conflict badge ──
   const conflicts = useMemo(
@@ -48,12 +49,13 @@ function AppShell() {
   )
 
   const VIEWS = [
-    { id: 'schedule',    label: '📋 Schedule',    short: 'Schedule',    roles: null },
-    { id: 'activations', label: '🎪 Activations', short: 'Areas',       roles: null },
-    { id: 'people',      label: '👥 People',      short: 'People',      roles: ['super_admin', 'ops_lead'] },
-    { id: 'live',        label: '🚨 Live Update', short: 'Live',        roles: ['super_admin', 'ops_lead'] },
-    { id: 'personal',    label: '📱 My Schedule', short: 'Mine',        roles: null },
-    { id: 'checklist',   label: '✅ Checklist',   short: 'Tasks',       roles: null },
+    { id: 'schedule_ro',   label: '📋 Schedule',        short: 'Schedule', roles: null },
+    { id: 'activations',   label: '🎪 Activations',     short: 'Areas',    roles: null },
+    { id: 'people',        label: '👥 People',           short: 'People',   roles: ['super_admin', 'ops_lead'] },
+    { id: 'live',          label: '🚨 Live Update',      short: 'Live',     roles: ['super_admin', 'ops_lead'] },
+    { id: 'personal',      label: '📱 My Schedule',      short: 'Mine',     roles: null },
+    { id: 'checklist',     label: '✅ Checklist',        short: 'Tasks',    roles: null },
+    { id: 'schedule_edit', label: '✏️ Schedule Edit',    short: 'Edit',     roles: ['super_admin', 'ops_lead'] },
   ]
 
   const visibleViews = VIEWS.filter(v => !v.roles || v.roles.includes(role))
@@ -144,12 +146,13 @@ function AppShell() {
 
       {/* ── VIEWS ── */}
       <main className="main">
-        {activeView === 'schedule'    && <ScheduleView />}
-        {activeView === 'activations' && <ActivationsView />}
-        {activeView === 'people'      && isOpsOrAbove && <PeopleView />}
-        {activeView === 'live'        && isOpsOrAbove && <LiveUpdateView />}
-        {activeView === 'personal'    && <MyScheduleView />}
-        {activeView === 'checklist'   && <ChecklistView />}
+        {activeView === 'schedule_ro'   && <ScheduleViewReadOnly />}
+        {activeView === 'activations'   && <ActivationsView />}
+        {activeView === 'people'        && isOpsOrAbove && <PeopleView />}
+        {activeView === 'live'          && isOpsOrAbove && <LiveUpdateView />}
+        {activeView === 'personal'      && <MyScheduleView />}
+        {activeView === 'checklist'     && <ChecklistView />}
+        {activeView === 'schedule_edit' && isOpsOrAbove && <ScheduleView />}
       </main>
     </div>
   )
