@@ -399,7 +399,6 @@ function AddEditChecklistModal({ item, eventId, people, onTrack, areaSessions, d
     title:                item?.title       || '',
     description:          item?.description || '',
     person_id:            item?.person_id   || defaultPersonId || '',
-    sort_order:           item?.sort_order  ?? 0,
     day_id:               item?.day_id      ?? defaultDayId ?? '',
     due_mode:             initDueMode(),
     due_time:             item?.due_mins != null ? fromMins(item.due_mins) : '',
@@ -442,7 +441,6 @@ function AddEditChecklistModal({ item, eventId, people, onTrack, areaSessions, d
       title:               form.title.trim(),
       description:         form.description.trim() || null,
       person_id:           form.person_id || null,
-      sort_order:          parseInt(form.sort_order, 10) || 0,
       day_id:              form.day_id || null,
       dep_type:            form.due_mode === 'none' ? 'fixed' : form.due_mode,
       due_mins:            form.due_mode === 'fixed' && form.due_time ? toMins(form.due_time) : null,
@@ -591,34 +589,17 @@ function AddEditChecklistModal({ item, eventId, people, onTrack, areaSessions, d
             </div>
           )}
 
-          <div className="form-row">
+          {!lockPerson && (
             <div className="form-group">
               <label>Assign to</label>
-              {lockPerson ? (
-                // Team members can only create items for themselves
-                <input
-                  value={people.find(p => p.id === form.person_id)?.name || 'You'}
-                  disabled
-                  style={{ opacity: 0.7 }}
-                />
-              ) : (
-                <select value={form.person_id} onChange={e => set('person_id', e.target.value)}>
-                  <option value="">— unassigned —</option>
-                  {[...people].sort((a, b) => a.name.localeCompare(b.name)).map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              )}
+              <select value={form.person_id} onChange={e => set('person_id', e.target.value)}>
+                <option value="">— unassigned —</option>
+                {[...people].sort((a, b) => a.name.localeCompare(b.name)).map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
             </div>
-            <div className="form-group" style={{ maxWidth: 100 }}>
-              <label>Order</label>
-              <input
-                type="number" min="0"
-                value={form.sort_order}
-                onChange={e => set('sort_order', e.target.value)}
-              />
-            </div>
-          </div>
+          )}
 
           <div className="modal-footer">
             <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
