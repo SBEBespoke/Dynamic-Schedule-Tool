@@ -134,7 +134,7 @@ export default function ActivationsView() {
             </button>
           ))}
         </div>
-        {isOpsOrAbove && (
+        {isSuperAdmin && (
           <button className="btn btn-ghost btn-sm" onClick={() => setShowAddArea(true)}>
             + Add Area
           </button>
@@ -154,7 +154,7 @@ export default function ActivationsView() {
         <div className="empty">
           <div style={{ fontSize: 28, marginBottom: 10 }}>🎪</div>
           No areas set up yet.
-          {isOpsOrAbove && <><br />Click <strong>+ Add Area</strong> above to get started.</>}
+          {isSuperAdmin && <><br />Click <strong>+ Add Area</strong> above to get started.</>}
         </div>
       )}
 
@@ -177,25 +177,23 @@ export default function ActivationsView() {
                     <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>({sessions.length})</span>
                   </div>
 
-                  {isOpsOrAbove && (
+                  {isSuperAdmin && (
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button
                         className="btn btn-ghost btn-xs"
                         onClick={() => setEditingArea(area)}
                       >Edit</button>
-                      {isSuperAdmin && (
-                        <button
-                          className="btn btn-danger btn-xs"
-                          onClick={() => deleteArea(area)}
-                          disabled={deleting === area.id}
-                        >✕</button>
-                      )}
+                      <button
+                        className="btn btn-danger btn-xs"
+                        onClick={() => deleteArea(area)}
+                        disabled={deleting === area.id}
+                      >✕</button>
                     </div>
                   )}
                 </div>
 
                 {/* Add session button */}
-                {isOpsOrAbove && (
+                {isSuperAdmin && (
                   <button
                     className="btn btn-ghost btn-xs"
                     style={{ width: '100%', marginBottom: 10, borderStyle: 'dashed' }}
@@ -251,20 +249,18 @@ export default function ActivationsView() {
                               </button>
                             )}
 
-                            {/* Actions — ops+ edit, admin delete */}
-                            {isOpsOrAbove && (
+                            {/* Actions — admin only */}
+                            {isSuperAdmin && (
                               <div style={{ display: 'flex', gap: 4 }}>
                                 <button
                                   className="btn btn-ghost btn-xs"
                                   onClick={() => setEditingAreaSession({ session, area })}
                                 >Edit</button>
-                                {isSuperAdmin && (
-                                  <button
-                                    className="btn btn-danger btn-xs"
-                                    onClick={() => deleteAreaSession(session)}
-                                    disabled={deleting === session.id}
-                                  >✕</button>
-                                )}
+                                <button
+                                  className="btn btn-danger btn-xs"
+                                  onClick={() => deleteAreaSession(session)}
+                                  disabled={deleting === session.id}
+                                >✕</button>
                               </div>
                             )}
                           </div>
