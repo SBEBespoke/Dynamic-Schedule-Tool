@@ -281,8 +281,8 @@ button { font-family: inherit; }
 /* ── RESPONSIVE VISIBILITY ── */
 .desktop-only { display: initial; }
 .mobile-only  { display: none; }
-.desktop-nav  { display: flex; }
-.mobile-nav   { display: none; }
+.desktop-nav  { display: flex !important; }
+.mobile-nav   { display: none !important; }
 
 /* ── MOBILE ── */
 @media (max-width: 640px) {

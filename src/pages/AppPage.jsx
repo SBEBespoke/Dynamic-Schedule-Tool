@@ -77,7 +77,7 @@ function AppShell() {
           </button>
           <div>
             <div style={styles.headerTitle}>{event.name}</div>
-            {event.venue && <div style={styles.headerSub + ' desktop-only'}>📍 {event.venue}</div>}
+            {event.venue && <div style={styles.headerSub} className="desktop-only">📍 {event.venue}</div>}
           </div>
         </div>
 
@@ -189,7 +189,7 @@ const styles = {
   },
   headerSub: { fontSize: '11px', color: 'var(--text-dim)', marginTop: 2 },
   nav: {
-    display: 'flex', background: 'var(--surface)',
+    background: 'var(--surface)',
     borderBottom: '1px solid var(--border)', overflowX: 'auto',
   },
   navBtn: {
@@ -204,9 +204,8 @@ const styles = {
     position: 'fixed', bottom: 0, left: 0, right: 0,
     background: 'var(--surface)',
     borderTop: '1px solid var(--border)',
-    display: 'flex',
     zIndex: 200,
-    paddingBottom: 'env(safe-area-inset-bottom)', // iPhone notch support
+    paddingBottom: 'env(safe-area-inset-bottom)',
   },
   mobileNavBtn: {
     flex: 1, border: 'none', background: 'none',
