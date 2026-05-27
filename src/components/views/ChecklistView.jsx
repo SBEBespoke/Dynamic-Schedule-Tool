@@ -174,7 +174,7 @@ export default function ChecklistView() {
   }
 
   const sharedRowProps = {
-    people, isOpsOrAbove, saving, onTrack, areaSessions, days, now,
+    people, isOpsOrAbove, me, saving, onTrack, areaSessions, days, now,
     onToggle: item => toggleComplete(item),
     onEdit:   item => setEditingItem(item),
     onDelete: item => deleteItem(item),
@@ -214,6 +214,7 @@ export default function ChecklistView() {
             dayId={day.id}
             items={sortByDueTime(itemsForDay(day.id), onTrack, areaSessions)}
             isOpsOrAbove={isOpsOrAbove}
+            me={me}
             onAdd={() => setAddDayId(day.id)}
             rowProps={sharedRowProps}
             onTrack={onTrack}
@@ -233,6 +234,8 @@ export default function ChecklistView() {
           areaSessions={areaSessions}
           days={sortedDays}
           defaultDayId={editingItem ? undefined : addDayId}
+          defaultPersonId={me?.id}
+          lockPerson={!isOpsOrAbove}
           onClose={() => { setAddDayId(null); setEditingItem(null) }}
           onSaved={() => { setAddDayId(null); setEditingItem(null); loadItems() }}
         />
@@ -243,7 +246,7 @@ export default function ChecklistView() {
 
 // ── Day column ────────────────────────────────────────────────────────────────
 
-function DayColumn({ label, dayId, items, isOpsOrAbove, onAdd, rowProps, onTrack, areaSessions, now }) {
+function DayColumn({ label, dayId, items, isOpsOrAbove, me, onAdd, rowProps, onTrack, areaSessions, now }) {
   const pending   = items.filter(i => !i.completed)
   const done      = items.filter(i => i.completed)
   const overdue   = pending.filter(i => {
@@ -297,8 +300,8 @@ function DayColumn({ label, dayId, items, isOpsOrAbove, onAdd, rowProps, onTrack
         </div>
       )}
 
-      {/* Add button */}
-      {isOpsOrAbove && (
+      {/* Add button — visible to anyone with a person record, or ops */}
+      {(isOpsOrAbove || !!me) && (
         <button
           className="btn btn-ghost btn-xs"
           onClick={onAdd}
@@ -313,7 +316,8 @@ function DayColumn({ label, dayId, items, isOpsOrAbove, onAdd, rowProps, onTrack
 
 // ── Checklist row ─────────────────────────────────────────────────────────────
 
-function ChecklistRow({ item, people, isOpsOrAbove, saving, onToggle, onEdit, onDelete, onTrack, areaSessions, days, now, compact }) {
+function ChecklistRow({ item, people, isOpsOrAbove, me, saving, onToggle, onEdit, onDelete, onTrack, areaSessions, days, now, compact }) {
+  const canManage = isOpsOrAbove || item.person_id === me?.id
   const dueMins          = getDueMins(item, onTrack, areaSessions)
   const scheduledDueMins = getScheduledDueMins(item, onTrack, areaSessions)
   const isLinked         = item.dep_type === 'on_track' || item.dep_type === 'area_session'
@@ -364,8 +368,8 @@ function ChecklistRow({ item, people, isOpsOrAbove, saving, onToggle, onEdit, on
             </span>
           )}
 
-          {/* Edit / Delete */}
-          {isOpsOrAbove && (
+          {/* Edit / Delete — ops or the item's own owner */}
+          {canManage && (
             <>
               <button className="btn btn-ghost btn-xs" onClick={() => onEdit(item)}>Edit</button>
               <button className="btn btn-danger btn-xs" onClick={() => onDelete(item)}>✕</button>
@@ -379,7 +383,7 @@ function ChecklistRow({ item, people, isOpsOrAbove, saving, onToggle, onEdit, on
 
 // ── Add / Edit modal ──────────────────────────────────────────────────────────
 
-function AddEditChecklistModal({ item, eventId, people, onTrack, areaSessions, days, defaultDayId, onClose, onSaved }) {
+function AddEditChecklistModal({ item, eventId, people, onTrack, areaSessions, days, defaultDayId, defaultPersonId, lockPerson, onClose, onSaved }) {
   const { toast } = useToast()
   const [saving, setSaving] = useState(false)
 
@@ -394,7 +398,7 @@ function AddEditChecklistModal({ item, eventId, people, onTrack, areaSessions, d
   const [form, setForm] = useState({
     title:                item?.title       || '',
     description:          item?.description || '',
-    person_id:            item?.person_id   || '',
+    person_id:            item?.person_id   || defaultPersonId || '',
     sort_order:           item?.sort_order  ?? 0,
     day_id:               item?.day_id      ?? defaultDayId ?? '',
     due_mode:             initDueMode(),
@@ -589,13 +593,22 @@ function AddEditChecklistModal({ item, eventId, people, onTrack, areaSessions, d
 
           <div className="form-row">
             <div className="form-group">
-              <label>Assign to <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
-              <select value={form.person_id} onChange={e => set('person_id', e.target.value)}>
-                <option value="">— unassigned —</option>
-                {[...people].sort((a, b) => a.name.localeCompare(b.name)).map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
+              <label>Assign to</label>
+              {lockPerson ? (
+                // Team members can only create items for themselves
+                <input
+                  value={people.find(p => p.id === form.person_id)?.name || 'You'}
+                  disabled
+                  style={{ opacity: 0.7 }}
+                />
+              ) : (
+                <select value={form.person_id} onChange={e => set('person_id', e.target.value)}>
+                  <option value="">— unassigned —</option>
+                  {[...people].sort((a, b) => a.name.localeCompare(b.name)).map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
             <div className="form-group" style={{ maxWidth: 100 }}>
               <label>Order</label>

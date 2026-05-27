@@ -23,7 +23,7 @@ function Placeholder({ label }) {
 
 // ── Role display labels ──
 const ROLE_LABELS = {
-  super_admin:  'Super Admin',
+  super_admin:  'Administrator',
   ops_lead:     'Ops Lead',
   area_manager: 'Area Manager',
   team_member:  'Team Member',

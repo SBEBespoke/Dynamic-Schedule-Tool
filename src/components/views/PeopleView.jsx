@@ -9,7 +9,7 @@ import AssignSessionsModal from '../modals/AssignSessionsModal'
 
 export default function PeopleView() {
   const { eventId, days, onTrack, areas, areaSessions, people, reload } = useEvent()
-  const { isOpsOrAbove } = useAuth()
+  const { isOpsOrAbove, isSuperAdmin } = useAuth()
   const { toast } = useToast()
 
   const [search,          setSearch]          = useState('')
@@ -140,13 +140,15 @@ export default function PeopleView() {
                     <button className="btn btn-ghost btn-xs" onClick={() => setEditingPerson(p)}>
                       Edit
                     </button>
-                    <button
-                      className="btn btn-danger btn-xs"
-                      onClick={() => deletePerson(p)}
-                      disabled={deleting === p.id}
-                    >
-                      Remove
-                    </button>
+                    {isSuperAdmin && (
+                      <button
+                        className="btn btn-danger btn-xs"
+                        onClick={() => deletePerson(p)}
+                        disabled={deleting === p.id}
+                      >
+                        Remove
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

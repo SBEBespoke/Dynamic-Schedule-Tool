@@ -10,10 +10,12 @@ import AddEditDayModal    from '../modals/AddEditDayModal'
 import WeatherWidget      from '../WeatherWidget'
 
 export default function ScheduleView() {
-  const { eventId, days, onTrack, reload } = useEvent()
+  const { eventId, days, onTrack, people, reload } = useEvent()
   const { getWeather, getDayWeather, dateInWindow } = useWeather(days)
-  const { isOpsOrAbove } = useAuth()
+  const { isOpsOrAbove, isSuperAdmin, profile } = useAuth()
   const { toast } = useToast()
+
+  const me = people.find(p => p.linked_user_id === profile?.id)
 
   const [activeDay,      setActiveDay]      = useState(null)
   const [showAddSession, setShowAddSession] = useState(false)
@@ -21,6 +23,21 @@ export default function ScheduleView() {
   const [showAddDay,     setShowAddDay]     = useState(false)
   const [editingDay,     setEditingDay]     = useState(null)
   const [deleting,       setDeleting]       = useState(null)
+  const [joining,        setJoining]        = useState(null)
+
+  async function toggleJoin(s) {
+    if (!me) return
+    setJoining(s.id)
+    const isJoined = me.people_on_track?.some(pot => pot.session_id === s.id)
+    if (isJoined) {
+      await supabase.from('people_on_track').delete().eq('person_id', me.id).eq('session_id', s.id)
+    } else {
+      const { error } = await supabase.from('people_on_track').insert([{ person_id: me.id, session_id: s.id }])
+      if (error) toast('Error', error.message, 'danger')
+    }
+    setJoining(null)
+    reload()
+  }
 
   const sortedDays = [...days].sort((a, b) => a.sort_order - b.sort_order)
 
@@ -118,13 +135,15 @@ export default function ScheduleView() {
                 <button className="btn btn-ghost btn-sm" onClick={() => setEditingDay(activeDay_)}>
                   Edit Day
                 </button>
-                <button
-                  className="btn btn-danger btn-sm"
-                  onClick={() => deleteDay(activeDay_)}
-                  disabled={deleting === activeDay_?.id}
-                >
-                  Delete Day
-                </button>
+                {isSuperAdmin && (
+                  <button
+                    className="btn btn-danger btn-sm"
+                    onClick={() => deleteDay(activeDay_)}
+                    disabled={deleting === activeDay_?.id}
+                  >
+                    Delete Day
+                  </button>
+                )}
                 <button className="btn btn-primary btn-sm" onClick={() => setShowAddSession(true)}>
                   + Session
                 </button>
@@ -207,15 +226,29 @@ export default function ScheduleView() {
                     <span className="slip-pill cascade" title="Auto-cascaded">↓ +{s.cascade_slip_mins}m</span>
                   )}
 
-                  {/* Actions */}
+                  {/* Join / Leave — visible to anyone with a person record */}
+                  {me && (
+                    <button
+                      className={`btn btn-xs ${me.people_on_track?.some(pot => pot.session_id === s.id) ? 'btn-warning' : 'btn-ghost'}`}
+                      style={{ flexShrink: 0 }}
+                      disabled={joining === s.id}
+                      onClick={() => toggleJoin(s)}
+                    >
+                      {me.people_on_track?.some(pot => pot.session_id === s.id) ? '✓ Joined' : '+ Join'}
+                    </button>
+                  )}
+
+                  {/* Actions — ops+ edit, admin delete */}
                   {isOpsOrAbove && (
                     <div className="s-actions">
                       <button className="btn btn-ghost btn-xs" onClick={() => setEditingSession(s)}>Edit</button>
-                      <button
-                        className="btn btn-danger btn-xs"
-                        onClick={() => deleteSession(s)}
-                        disabled={deleting === s.id}
-                      >✕</button>
+                      {isSuperAdmin && (
+                        <button
+                          className="btn btn-danger btn-xs"
+                          onClick={() => deleteSession(s)}
+                          disabled={deleting === s.id}
+                        >✕</button>
+                      )}
                     </div>
                   )}
                 </div>

@@ -9,9 +9,26 @@ import AddEditAreaModal        from '../modals/AddEditAreaModal'
 import AddEditAreaSessionModal from '../modals/AddEditAreaSessionModal'
 
 export default function ActivationsView() {
-  const { eventId, days, onTrack, areas, areaSessions, reload } = useEvent()
-  const { isOpsOrAbove } = useAuth()
+  const { eventId, days, onTrack, areas, areaSessions, people, reload } = useEvent()
+  const { isOpsOrAbove, isSuperAdmin, profile } = useAuth()
   const { toast } = useToast()
+
+  const me = people.find(p => p.linked_user_id === profile?.id)
+  const [joining, setJoining] = useState(null)
+
+  async function toggleJoinArea(session) {
+    if (!me) return
+    setJoining(session.id)
+    const isJoined = me.people_area_sessions?.some(pas => pas.area_session_id === session.id)
+    if (isJoined) {
+      await supabase.from('people_area_sessions').delete().eq('person_id', me.id).eq('area_session_id', session.id)
+    } else {
+      const { error } = await supabase.from('people_area_sessions').insert([{ person_id: me.id, area_session_id: session.id }])
+      if (error) toast('Error', error.message, 'danger')
+    }
+    setJoining(null)
+    reload()
+  }
 
   const sortedDays = [...days].sort((a, b) => a.sort_order - b.sort_order)
 
@@ -166,11 +183,13 @@ export default function ActivationsView() {
                         className="btn btn-ghost btn-xs"
                         onClick={() => setEditingArea(area)}
                       >Edit</button>
-                      <button
-                        className="btn btn-danger btn-xs"
-                        onClick={() => deleteArea(area)}
-                        disabled={deleting === area.id}
-                      >✕</button>
+                      {isSuperAdmin && (
+                        <button
+                          className="btn btn-danger btn-xs"
+                          onClick={() => deleteArea(area)}
+                          disabled={deleting === area.id}
+                        >✕</button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -220,20 +239,35 @@ export default function ActivationsView() {
                             </div>
                           )}
 
-                          {/* Actions */}
-                          {isOpsOrAbove && (
-                            <div style={{ display: 'flex', gap: 4, marginTop: 8, justifyContent: 'flex-end' }}>
+                          {/* Join / Leave */}
+                          <div style={{ display: 'flex', gap: 4, marginTop: 8, justifyContent: 'space-between', alignItems: 'center' }}>
+                            {me && (
                               <button
-                                className="btn btn-ghost btn-xs"
-                                onClick={() => setEditingAreaSession({ session, area })}
-                              >Edit</button>
-                              <button
-                                className="btn btn-danger btn-xs"
-                                onClick={() => deleteAreaSession(session)}
-                                disabled={deleting === session.id}
-                              >✕</button>
-                            </div>
-                          )}
+                                className={`btn btn-xs ${me.people_area_sessions?.some(pas => pas.area_session_id === session.id) ? 'btn-warning' : 'btn-ghost'}`}
+                                disabled={joining === session.id}
+                                onClick={() => toggleJoinArea(session)}
+                              >
+                                {me.people_area_sessions?.some(pas => pas.area_session_id === session.id) ? '✓ Joined' : '+ Join'}
+                              </button>
+                            )}
+
+                            {/* Actions — ops+ edit, admin delete */}
+                            {isOpsOrAbove && (
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                <button
+                                  className="btn btn-ghost btn-xs"
+                                  onClick={() => setEditingAreaSession({ session, area })}
+                                >Edit</button>
+                                {isSuperAdmin && (
+                                  <button
+                                    className="btn btn-danger btn-xs"
+                                    onClick={() => deleteAreaSession(session)}
+                                    disabled={deleting === session.id}
+                                  >✕</button>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )
                     })}
