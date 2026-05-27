@@ -121,6 +121,10 @@ export default function LiveUpdateView() {
       const cascadedMap  = new Map(cascaded.map(s => [s.id, s]))
       const dayName      = sortedDays.find(d => d.id === activeDay)?.name || ''
 
+      // DEBUG — remove after testing
+      console.log('[WA] changedIds:', [...changedIds])
+      console.log('[WA] people with phones:', people.filter(p => p.phone_whatsapp).map(p => ({ name: p.name, phone: p.phone_whatsapp, on_track: p.people_on_track })))
+
       const notifications = []
       for (const person of people) {
         if (!person.phone_whatsapp) continue
