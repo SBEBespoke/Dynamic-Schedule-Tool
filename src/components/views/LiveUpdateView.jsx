@@ -123,7 +123,7 @@ export default function LiveUpdateView() {
 
       // DEBUG — remove after testing
       console.log('[WA] changedIds:', [...changedIds])
-      console.log('[WA] people with phones:', people.filter(p => p.phone_whatsapp).map(p => ({ name: p.name, phone: p.phone_whatsapp, on_track: p.people_on_track })))
+      console.log('[WA] on_track session IDs:', people.filter(p => p.phone_whatsapp).flatMap(p => (p.people_on_track || []).map(x => x.session_id)))
 
       const notifications = []
       for (const person of people) {
