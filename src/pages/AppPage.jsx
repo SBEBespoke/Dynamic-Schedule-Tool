@@ -6,21 +6,10 @@ import { getConflicts, getConflictPersonIds } from '../lib/conflicts'
 import ScheduleView         from '../components/views/ScheduleView'
 import ScheduleViewReadOnly from '../components/views/ScheduleViewReadOnly'
 import ActivationsView      from '../components/views/ActivationsView'
-import PeopleView      from '../components/views/PeopleView'
-import MyScheduleView  from '../components/views/MyScheduleView'
-import LiveUpdateView  from '../components/views/LiveUpdateView'
-import ChecklistView   from '../components/views/ChecklistView'
-
-// ── Placeholder (for Phase 4 views) ──
-function Placeholder({ label }) {
-  return (
-    <div className="empty" style={{ paddingTop: 60 }}>
-      <div style={{ fontSize: 32, marginBottom: 12 }}>🚧</div>
-      <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)', marginBottom: 6 }}>{label}</div>
-      <div>Coming in the next build phase.</div>
-    </div>
-  )
-}
+import PeopleView           from '../components/views/PeopleView'
+import MyScheduleView       from '../components/views/MyScheduleView'
+import LiveUpdateView       from '../components/views/LiveUpdateView'
+import ChecklistView        from '../components/views/ChecklistView'
 
 // ── Role display labels ──
 const ROLE_LABELS = {
@@ -30,15 +19,32 @@ const ROLE_LABELS = {
   team_member:  'Team Member',
 }
 
+// ── Role preview options (for Administrator "View as") ──
+const PREVIEW_ROLES = [
+  { value: null,           label: 'Administrator' },
+  { value: 'ops_lead',     label: 'Ops Lead' },
+  { value: 'team_member',  label: 'Team Member' },
+]
+
+// ── Helper: effective permission from a role string ──
+function roleIsOpsOrAbove(r) {
+  return ['super_admin', 'ops_lead', 'area_manager'].includes(r)
+}
+
 // ── Main app shell ──
 function AppShell() {
   const { event, loading, error, onTrack, areaSessions, people } = useEvent()
   const { profile, role, isOpsOrAbove, isSuperAdmin, signOut } = useAuth()
   const navigate = useNavigate()
 
-  const [activeView, setView] = useState('schedule_ro')
+  const [activeView,   setView]       = useState('schedule_ro')
+  const [previewRole,  setPreviewRole] = useState(null)
 
-  // ── Global conflict badge ──
+  // Effective role: preview overrides real role (admins only)
+  const effectiveRole        = isSuperAdmin && previewRole ? previewRole : role
+  const effectiveIsOpsOrAbove = roleIsOpsOrAbove(effectiveRole)
+
+  // ── Global conflict badge (always uses real role) ──
   const conflicts = useMemo(
     () => getConflicts(people, onTrack, areaSessions),
     [people, onTrack, areaSessions]
@@ -49,20 +55,35 @@ function AppShell() {
   )
 
   const VIEWS = [
-    { id: 'schedule_ro',   label: '📋 Schedule',        short: 'Schedule', roles: null },
-    { id: 'activations',   label: '🎪 Activations',     short: 'Areas',    roles: null },
-    { id: 'people',        label: '👥 People',           short: 'People',   roles: ['super_admin', 'ops_lead'] },
-    { id: 'live',          label: '🚨 Live Update',      short: 'Live',     roles: ['super_admin', 'ops_lead'] },
-    { id: 'personal',      label: '📱 My Schedule',      short: 'Mine',     roles: null },
-    { id: 'checklist',     label: '✅ Checklist',        short: 'Tasks',    roles: null },
-    { id: 'schedule_edit', label: '✏️ Schedule Edit',    short: 'Edit',     roles: ['super_admin', 'ops_lead'] },
+    { id: 'schedule_ro',   label: '📋 On Track',        short: 'On Track',    roles: null },
+    { id: 'activations',   label: '🎪 Activations',     short: 'Activations', roles: null },
+    { id: 'people',        label: '👥 People',           short: 'People',      roles: ['super_admin', 'ops_lead'] },
+    { id: 'live',          label: '🚨 Live Update',      short: 'Live',        roles: ['super_admin', 'ops_lead'] },
+    { id: 'personal',      label: '📱 My Schedule',      short: 'Mine',        roles: null },
+    { id: 'checklist',     label: '✅ Checklist',        short: 'Tasks',       roles: null },
+    { id: 'schedule_edit', label: '✏️ Schedule Edit',    short: 'Edit',        roles: ['super_admin', 'ops_lead'] },
   ]
 
-  const visibleViews = VIEWS.filter(v => !v.roles || v.roles.includes(role))
+  // Filter nav tabs by effective role
+  const visibleViews = VIEWS.filter(v => !v.roles || v.roles.includes(effectiveRole))
+
+  // If active view becomes hidden after a role switch, fall back to first visible
+  const activeViewIsVisible = visibleViews.some(v => v.id === activeView)
+
+  function switchPreviewRole(newRole) {
+    setPreviewRole(newRole)
+    // Reset to On Track if current view would be hidden
+    const wouldBeVisible = VIEWS
+      .filter(v => !v.roles || v.roles.includes(newRole || role))
+      .some(v => v.id === activeView)
+    if (!wouldBeVisible) setView('schedule_ro')
+  }
 
   if (loading) return <div className="page-loading">Loading event…</div>
   if (error)   return <div className="page-loading" style={{ color: 'var(--danger)' }}>Error: {error}</div>
   if (!event)  return <div className="page-loading">Event not found.</div>
+
+  const isPreviewing = isSuperAdmin && previewRole !== null
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
@@ -84,7 +105,7 @@ function AppShell() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {/* Conflict badge */}
+          {/* Conflict badge — always real role */}
           {isOpsOrAbove && conflictCount > 0 && (
             <button
               style={conflictBadgeStyle}
@@ -94,6 +115,28 @@ function AppShell() {
               ⚠ {conflictCount}
             </button>
           )}
+
+          {/* View As — Administrator only */}
+          {isSuperAdmin && (
+            <div style={styles.viewAs} className="desktop-only">
+              <span style={styles.viewAsLabel}>View as</span>
+              <div style={styles.viewAsPills}>
+                {PREVIEW_ROLES.map(pr => (
+                  <button
+                    key={String(pr.value)}
+                    style={{
+                      ...styles.viewAsPill,
+                      ...(effectiveRole === (pr.value || 'super_admin') ? styles.viewAsPillActive : {}),
+                    }}
+                    onClick={() => switchPreviewRole(pr.value)}
+                  >
+                    {pr.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {isSuperAdmin && (
             <button
               className="btn btn-ghost btn-sm"
@@ -114,6 +157,19 @@ function AppShell() {
           </button>
         </div>
       </div>
+
+      {/* ── PREVIEW BANNER ── */}
+      {isPreviewing && (
+        <div style={styles.previewBanner}>
+          <span>👁 Previewing as <strong>{ROLE_LABELS[previewRole]}</strong> — nav tabs are simulated. Content still uses Administrator permissions.</span>
+          <button
+            style={styles.previewClose}
+            onClick={() => switchPreviewRole(null)}
+          >
+            Exit preview
+          </button>
+        </div>
+      )}
 
       {/* ── DESKTOP NAV (top tabs) ── */}
       <nav style={styles.nav} className="desktop-nav">
@@ -137,7 +193,7 @@ function AppShell() {
             onClick={() => setView(v.id)}
           >
             <span style={{ fontSize: 20, lineHeight: 1 }}>{v.label.split(' ')[0]}</span>
-            <span style={{ fontSize: 10, marginTop: 2, fontWeight: activeView === v.id ? 700 : 400 }}>
+            <span style={{ fontSize: 9, marginTop: 2, fontWeight: activeView === v.id ? 700 : 400, letterSpacing: '-0.2px' }}>
               {v.short}
             </span>
           </button>
@@ -148,17 +204,17 @@ function AppShell() {
       <main className="main">
         {activeView === 'schedule_ro'   && <ScheduleViewReadOnly />}
         {activeView === 'activations'   && <ActivationsView />}
-        {activeView === 'people'        && isOpsOrAbove && <PeopleView />}
-        {activeView === 'live'          && isOpsOrAbove && <LiveUpdateView />}
+        {activeView === 'people'        && effectiveIsOpsOrAbove && <PeopleView />}
+        {activeView === 'live'          && effectiveIsOpsOrAbove && <LiveUpdateView />}
         {activeView === 'personal'      && <MyScheduleView />}
         {activeView === 'checklist'     && <ChecklistView />}
-        {activeView === 'schedule_edit' && isOpsOrAbove && <ScheduleView />}
+        {activeView === 'schedule_edit' && effectiveIsOpsOrAbove && <ScheduleView />}
       </main>
     </div>
   )
 }
 
-// ── Conflict badge style — pulsing orange pill ──
+// ── Conflict badge style — pulsing red pill ──
 const conflictBadgeStyle = {
   fontSize: 12,
   fontWeight: 700,
@@ -191,6 +247,48 @@ const styles = {
     color: 'var(--accent)', lineHeight: 1,
   },
   headerSub: { fontSize: '11px', color: 'var(--text-dim)', marginTop: 2 },
+
+  // View As switcher
+  viewAs: {
+    display: 'flex', alignItems: 'center', gap: 8,
+    background: 'var(--surface2)',
+    border: '1px solid var(--border)',
+    borderRadius: 8,
+    padding: '4px 10px',
+  },
+  viewAsLabel: {
+    fontSize: 11, fontWeight: 600,
+    color: 'var(--text-dim)',
+    textTransform: 'uppercase', letterSpacing: '0.5px',
+    whiteSpace: 'nowrap',
+  },
+  viewAsPills: { display: 'flex', gap: 4 },
+  viewAsPill: {
+    padding: '3px 10px', border: '1px solid var(--border)',
+    borderRadius: 6, background: 'transparent',
+    color: 'var(--text-dim)', fontSize: 11, fontWeight: 600,
+    cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
+  },
+  viewAsPillActive: {
+    background: 'var(--accent)', color: '#000',
+    borderColor: 'var(--accent)',
+  },
+
+  // Preview banner
+  previewBanner: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+    background: 'rgba(139,92,246,0.1)',
+    borderBottom: '1px solid rgba(139,92,246,0.3)',
+    padding: '8px 20px',
+    fontSize: 12, color: '#c4b5fd',
+  },
+  previewClose: {
+    padding: '3px 10px', border: '1px solid rgba(139,92,246,0.4)',
+    borderRadius: 6, background: 'transparent',
+    color: '#c4b5fd', fontSize: 11, fontWeight: 600,
+    cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+  },
+
   nav: {
     background: 'var(--surface)',
     borderBottom: '1px solid var(--border)', overflowX: 'auto',
@@ -215,7 +313,7 @@ const styles = {
     color: 'var(--text-dim)', cursor: 'pointer',
     display: 'flex', flexDirection: 'column',
     alignItems: 'center', justifyContent: 'center',
-    padding: '8px 4px',
+    padding: '8px 2px',
     transition: 'color 0.15s',
     minHeight: 56,
   },
