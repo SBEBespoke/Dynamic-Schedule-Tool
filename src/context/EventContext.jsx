@@ -13,6 +13,7 @@ export function EventProvider({ children }) {
   const [areas,        setAreas]        = useState([])
   const [areaSessions, setAreaSessions] = useState([])
   const [people,       setPeople]       = useState([])
+  const [departments,  setDepartments]  = useState([])
   const [slipLog,      setSlipLog]      = useState([])
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState(null)
@@ -29,6 +30,7 @@ export function EventProvider({ children }) {
         { data: ar },
         { data: as_ },
         { data: pe },
+        { data: dept },
         { data: sl },
       ] = await Promise.all([
         supabase.from('events').select('*').eq('id', eventId).single(),
@@ -37,6 +39,7 @@ export function EventProvider({ children }) {
         supabase.from('areas').select('*').eq('event_id', eventId),
         supabase.from('area_sessions').select('*').eq('event_id', eventId),
         supabase.from('people').select('*, people_on_track(session_id), people_area_sessions(area_session_id)').eq('event_id', eventId),
+        supabase.from('departments').select('*').eq('event_id', eventId).order('sort_order'),
         supabase.from('slip_log').select('*').eq('event_id', eventId).order('created_at', { ascending: false }).limit(50),
       ])
 
@@ -46,6 +49,7 @@ export function EventProvider({ children }) {
       setAreas(ar || [])
       setAreaSessions(as_ || [])
       setPeople(pe || [])
+      setDepartments(dept || [])
       setSlipLog(sl || [])
     } catch (err) {
       setError(err.message)
@@ -80,6 +84,10 @@ export function EventProvider({ children }) {
         event: '*', schema: 'public', table: 'people',
         filter: `event_id=eq.${eventId}`,
       }, () => loadAll())
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'departments',
+        filter: `event_id=eq.${eventId}`,
+      }, () => loadAll())
       .subscribe()
 
     return () => supabase.removeChannel(channel)
@@ -94,6 +102,7 @@ export function EventProvider({ children }) {
       areas,
       areaSessions,
       people,
+      departments,
       slipLog,
       loading,
       error,

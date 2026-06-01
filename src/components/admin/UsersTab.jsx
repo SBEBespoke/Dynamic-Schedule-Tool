@@ -18,7 +18,7 @@ const ROLE_LABELS = {
 
 export default function UsersTab() {
   const { user: currentUser } = useAuth()
-  const { people, reload: reloadEvent } = useEvent()
+  const { people, departments, reload: reloadEvent } = useEvent()
   const { toast } = useToast()
 
   const [users,    setUsers]    = useState([])
@@ -152,6 +152,10 @@ export default function UsersTab() {
   const linkedByUserId = {}
   people.forEach(p => { if (p.linked_user_id) linkedByUserId[p.linked_user_id] = p })
 
+  // Map deptId → dept name
+  const deptById = {}
+  departments.forEach(d => { deptById[d.id] = d })
+
   // People with no linked user — available to link
   const unlinkedPeople = people.filter(p => !p.linked_user_id)
 
@@ -233,7 +237,7 @@ export default function UsersTab() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr>
-                {['Name', 'Email', 'Role', 'Linked Person', 'Last Active', 'Actions'].map(h => (
+                {['Name', 'Email', 'Role', 'Linked Person', 'Department', 'Last Active', 'Actions'].map(h => (
                   <th key={h} style={thStyle}>{h}</th>
                 ))}
               </tr>
@@ -296,6 +300,28 @@ export default function UsersTab() {
                           ))
                         }
                       </select>
+                    </td>
+
+                    {/* Department */}
+                    <td style={tdStyle}>
+                      {(() => {
+                        const dept = linked ? deptById[linked.department_id] : null
+                        return dept ? (
+                          <span style={{
+                            fontSize: 11, fontWeight: 600,
+                            color: dept.color,
+                            background: `${dept.color}18`,
+                            border: `1px solid ${dept.color}44`,
+                            borderRadius: 4,
+                            padding: '1px 7px',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {dept.name}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--text-dim)', fontSize: 11 }}>—</span>
+                        )
+                      })()}
                     </td>
 
                     {/* Last active */}

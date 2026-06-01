@@ -9,9 +9,9 @@ import AddEditPersonModal  from '../modals/AddEditPersonModal'
 import AssignSessionsModal from '../modals/AssignSessionsModal'
 
 export default function PeopleView() {
-  const { eventId, days, onTrack, areas, areaSessions, people, reload } = useEvent()
-  useAuth() // keep subscription alive
-  const { effectiveIsOpsOrAbove: isOpsOrAbove, effectiveIsSuperAdmin: isSuperAdmin } = useViewAuth()
+  const { eventId, days, onTrack, areas, areaSessions, people, departments, reload } = useEvent()
+  const { profile } = useAuth()
+  const { effectiveIsOpsOrAbove: isOpsOrAbove, effectiveIsSuperAdmin: isSuperAdmin, myDepartmentId } = useViewAuth()
   const { toast } = useToast()
 
   const [search,          setSearch]          = useState('')
@@ -24,7 +24,14 @@ export default function PeopleView() {
   const conflicts        = useMemo(() => getConflicts(people, onTrack, areaSessions), [people, onTrack, areaSessions])
   const conflictPersonIds = useMemo(() => getConflictPersonIds(conflicts), [conflicts])
 
-  const filtered = [...people]
+  // Department Leads only see their own department's people
+  const scopedPeople = isSuperAdmin
+    ? people
+    : isOpsOrAbove && myDepartmentId
+      ? people.filter(p => p.department_id === myDepartmentId)
+      : people
+
+  const filtered = [...scopedPeople]
     .filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => a.name.localeCompare(b.name))
 
@@ -48,9 +55,16 @@ export default function PeopleView() {
     <div>
       {/* ── Header ── */}
       <div className="sec-header" style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span className="sec-title">Team Members</span>
-          <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>({people.length})</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span className="sec-title">
+            {myDepartmentId && !isSuperAdmin
+              ? (departments.find(d => d.id === myDepartmentId)?.name || 'Team Members')
+              : 'Team Members'}
+          </span>
+          <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>({scopedPeople.length})</span>
+          {!isSuperAdmin && myDepartmentId && (
+            <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>· your department</span>
+          )}
           {conflictPersonIds.size > 0 && (
             <span style={conflictChip}>
               ⚠ {conflictPersonIds.size} conflict{conflictPersonIds.size > 1 ? 's' : ''}
@@ -65,7 +79,7 @@ export default function PeopleView() {
       </div>
 
       {/* ── Search ── */}
-      {people.length > 0 && (
+      {scopedPeople.length > 0 && (
         <input
           type="search"
           placeholder="Search team members…"
@@ -80,7 +94,7 @@ export default function PeopleView() {
       )}
 
       {/* ── Empty state ── */}
-      {people.length === 0 && (
+      {scopedPeople.length === 0 && (
         <div className="empty">
           <div style={{ fontSize: 28, marginBottom: 10 }}>👥</div>
           No team members added yet.
@@ -94,17 +108,25 @@ export default function PeopleView() {
           {filtered.map(p => {
             const hasConflict = conflictPersonIds.has(p.id)
             const count       = assignmentCount(p)
+            const dept        = departments.find(d => d.id === p.department_id)
 
             return (
               <div key={p.id} style={cardStyle(hasConflict)}>
 
                 {/* Name + conflict indicator */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
                   <div style={{ fontSize: 14, fontWeight: 700 }}>{p.name}</div>
                   {hasConflict && (
                     <span style={conflictBadge} title="Scheduling conflict detected">⚠</span>
                   )}
                 </div>
+
+                {/* Department badge */}
+                {dept && (
+                  <div style={{ marginBottom: 6 }}>
+                    <span style={deptBadge(dept.color)}>{dept.name}</span>
+                  </div>
+                )}
 
                 {/* Assignment count */}
                 <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 8 }}>
@@ -160,7 +182,7 @@ export default function PeopleView() {
       )}
 
       {/* ── No search results ── */}
-      {people.length > 0 && filtered.length === 0 && (
+      {scopedPeople.length > 0 && filtered.length === 0 && (
         <div className="empty">No team members match "{search}"</div>
       )}
 
@@ -169,6 +191,7 @@ export default function PeopleView() {
         <AddEditPersonModal
           person={editingPerson}
           eventId={eventId}
+          departments={departments}
           onClose={() => { setShowAdd(false); setEditingPerson(null) }}
           onSaved={() => { setShowAdd(false); setEditingPerson(null); reload() }}
         />
@@ -224,4 +247,17 @@ const conflictBadge = {
   color: '#ef4444',
   lineHeight: 1,
   flexShrink: 0,
+}
+
+function deptBadge(color) {
+  return {
+    display: 'inline-block',
+    fontSize: 10,
+    fontWeight: 600,
+    color: color,
+    background: `${color}18`,
+    border: `1px solid ${color}44`,
+    borderRadius: 4,
+    padding: '1px 7px',
+  }
 }

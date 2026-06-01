@@ -94,7 +94,7 @@ function isDayOverduable(day) {
 export default function ChecklistView() {
   const { eventId, people, onTrack, areaSessions, days } = useEvent()
   const { user, profile } = useAuth()
-  const { effectiveIsOpsOrAbove: isOpsOrAbove } = useViewAuth()
+  const { effectiveIsOpsOrAbove: isOpsOrAbove, effectiveIsSuperAdmin: isSuperAdmin, myDepartmentId } = useViewAuth()
   const { toast } = useToast()
 
   const [items,       setItems]       = useState([])
@@ -158,7 +158,26 @@ export default function ChecklistView() {
 
   // Filter by user (ops see all, others see only their assigned items)
   const me = people.find(p => p.linked_user_id === profile?.id)
-  const visibleItems = isOpsOrAbove ? items : items.filter(i => i.person_id === me?.id)
+
+  // Dept leads only see items assigned to people in their department
+  const visibleItems = isSuperAdmin
+    ? items
+    : isOpsOrAbove && myDepartmentId
+      ? items.filter(i => {
+          if (!i.person_id) return true  // unassigned — visible to lead
+          const person = people.find(p => p.id === i.person_id)
+          return person?.department_id === myDepartmentId
+        })
+      : isOpsOrAbove
+        ? items
+        : items.filter(i => i.person_id === me?.id)
+
+  // People the dept lead can assign tasks to (their dept only)
+  const assignablePeople = isSuperAdmin
+    ? people
+    : isOpsOrAbove && myDepartmentId
+      ? people.filter(p => p.department_id === myDepartmentId)
+      : people
 
   const totalDone    = visibleItems.filter(i => i.completed).length
 
@@ -191,6 +210,9 @@ export default function ChecklistView() {
     onEdit:   item => setEditingItem(item),
     onDelete: item => deleteItem(item),
   }
+
+  // People visible in the "Assign to" dropdown for the modal
+  const peopleForModal = assignablePeople
 
   return (
     <div>
@@ -240,7 +262,7 @@ export default function ChecklistView() {
         <AddEditChecklistModal
           item={editingItem}
           eventId={eventId}
-          people={people}
+          people={peopleForModal}
           onTrack={onTrack}
           areaSessions={areaSessions}
           days={sortedDays}

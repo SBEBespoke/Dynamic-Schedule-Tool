@@ -11,6 +11,7 @@ const ViewContext = createContext({
   effectiveRole:        null,
   effectiveIsSuperAdmin: false,
   effectiveIsOpsOrAbove: false,
+  myDepartmentId:       null,  // the logged-in user's person record's department_id
 })
 
 export const ViewProvider = ViewContext.Provider

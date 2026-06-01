@@ -11,11 +11,12 @@ import PeopleView           from '../components/views/PeopleView'
 import MyScheduleView       from '../components/views/MyScheduleView'
 import LiveUpdateView       from '../components/views/LiveUpdateView'
 import ChecklistView        from '../components/views/ChecklistView'
+import DepartmentView       from '../components/views/DepartmentView'
 
 // ── Role display labels ──
 const ROLE_LABELS = {
   super_admin:  'Administrator',
-  ops_lead:     'Ops Lead',
+  ops_lead:     'Department Lead',
   area_manager: 'Area Manager',
   team_member:  'Team Member',
 }
@@ -23,7 +24,7 @@ const ROLE_LABELS = {
 // ── Role preview options (for Administrator "View as") ──
 const PREVIEW_ROLES = [
   { value: null,           label: 'Administrator' },
-  { value: 'ops_lead',     label: 'Ops Lead' },
+  { value: 'ops_lead',     label: 'Department Lead' },
   { value: 'team_member',  label: 'Team Member' },
 ]
 
@@ -45,6 +46,10 @@ function AppShell() {
   const effectiveRole        = isSuperAdmin && previewRole ? previewRole : role
   const effectiveIsOpsOrAbove = roleIsOpsOrAbove(effectiveRole)
 
+  // The logged-in user's person record — used to scope dept lead views
+  const me = people.find(p => p.linked_user_id === profile?.id)
+  const myDepartmentId = me?.department_id || null
+
   // ── Global conflict badge (always uses real role) ──
   const conflicts = useMemo(
     () => getConflicts(people, onTrack, areaSessions),
@@ -58,6 +63,7 @@ function AppShell() {
   const VIEWS = [
     { id: 'schedule_ro',   label: '📋 On Track',        short: 'On Track',    roles: null },
     { id: 'activations',   label: '🎪 Activations',     short: 'Activations', roles: null },
+    { id: 'department',    label: '🏢 My Department',   short: 'Dept',        roles: ['ops_lead', 'team_member'] },
     { id: 'people',        label: '👥 People',           short: 'People',      roles: ['super_admin', 'ops_lead'] },
     { id: 'live',          label: '🚨 Live Update',      short: 'Live',        roles: ['super_admin', 'ops_lead'] },
     { id: 'personal',      label: '📱 My Schedule',      short: 'Mine',        roles: null },
@@ -206,10 +212,12 @@ function AppShell() {
         effectiveRole:         effectiveRole,
         effectiveIsSuperAdmin: effectiveRole === 'super_admin',
         effectiveIsOpsOrAbove: effectiveIsOpsOrAbove,
+        myDepartmentId:        myDepartmentId,
       }}>
         <main className="main">
           {activeView === 'schedule_ro'   && <ScheduleViewReadOnly />}
           {activeView === 'activations'   && <ActivationsView />}
+          {activeView === 'department'    && <DepartmentView />}
           {activeView === 'people'        && effectiveIsOpsOrAbove && <PeopleView />}
           {activeView === 'live'          && effectiveIsOpsOrAbove && <LiveUpdateView />}
           {activeView === 'personal'      && <MyScheduleView />}

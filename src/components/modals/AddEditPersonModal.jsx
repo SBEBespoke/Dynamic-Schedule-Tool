@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useToast } from '../../context/ToastContext'
 
-export default function AddEditPersonModal({ person, eventId, onClose, onSaved }) {
+export default function AddEditPersonModal({ person, eventId, departments = [], onClose, onSaved }) {
   const { toast } = useToast()
   const [saving,   setSaving]   = useState(false)
   const [profiles, setProfiles] = useState([])  // user_profiles for the link dropdown
@@ -11,6 +11,7 @@ export default function AddEditPersonModal({ person, eventId, onClose, onSaved }
     name:           person?.name           || '',
     phone_whatsapp: person?.phone_whatsapp || '',
     radio_channel:  person?.radio_channel  || '',
+    department_id:  person?.department_id  || '',
     linked_user_id: person?.linked_user_id || '',
   })
 
@@ -34,6 +35,7 @@ export default function AddEditPersonModal({ person, eventId, onClose, onSaved }
       name:           form.name.trim(),
       phone_whatsapp: form.phone_whatsapp.trim() || null,
       radio_channel:  form.radio_channel.trim()  || null,
+      department_id:  form.department_id || null,
       linked_user_id: form.linked_user_id || null,
     }
 
@@ -85,6 +87,23 @@ export default function AddEditPersonModal({ person, eventId, onClose, onSaved }
               placeholder="e.g. Ch 3"
             />
           </div>
+
+          {departments.length > 0 && (
+            <div className="form-group" style={{ marginBottom: 14 }}>
+              <label>Department <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
+              <select
+                value={form.department_id}
+                onChange={e => set('department_id', e.target.value)}
+              >
+                <option value="">— no department —</option>
+                {[...departments]
+                  .sort((a, b) => a.sort_order - b.sort_order)
+                  .map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+              </select>
+            </div>
+          )}
 
           <div className="form-group">
             <label>Link to User Account <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>

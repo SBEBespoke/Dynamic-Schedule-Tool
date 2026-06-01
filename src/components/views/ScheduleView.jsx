@@ -6,14 +6,17 @@ import { useViewAuth } from '../../context/ViewContext'
 import { useToast } from '../../context/ToastContext'
 import { fromMins, durStr, otStart, otEnd, otAdjusted } from '../../lib/time'
 import { useWeather, precipEmoji, precipColor } from '../../lib/useWeather'
+import { applyCascade, getCascadeUpdates } from '../../lib/cascade'
 import AddEditSessionModal from '../modals/AddEditSessionModal'
 import AddEditDayModal    from '../modals/AddEditDayModal'
 import WeatherWidget      from '../WeatherWidget'
 
+const QUICK_SLIPS = [5, 10, 15, 20]
+
 export default function ScheduleView() {
   const { eventId, days, onTrack, people, reload } = useEvent()
   const { getWeather, getDayWeather, dateInWindow } = useWeather(days)
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
   const { effectiveIsOpsOrAbove: isOpsOrAbove, effectiveIsSuperAdmin: isSuperAdmin } = useViewAuth()
   const { toast } = useToast()
 
@@ -26,6 +29,74 @@ export default function ScheduleView() {
   const [editingDay,     setEditingDay]     = useState(null)
   const [deleting,       setDeleting]       = useState(null)
   const [joining,        setJoining]        = useState(null)
+  const [applying,       setApplying]       = useState(null)
+
+  // Per-session custom slip input: { [sessionId]: string }
+  const [slipInputs, setSlipInputs] = useState({})
+
+  function getSlipInput(id) { return slipInputs[id] ?? '' }
+  function setSlipInput(id, val) { setSlipInputs(p => ({ ...p, [id]: val })) }
+
+  // ── Core cascade-save (no WhatsApp — use Live Update tab for day-of notifications) ──
+  async function saveSlip(session, newSlipMins) {
+    if (newSlipMins < 0) { toast('Invalid', 'Slip cannot be negative', 'warn'); return }
+    setApplying(session.id)
+
+    const allDaySessions = onTrack.filter(s => s.day_id === activeDay)
+    const cascaded = applyCascade(allDaySessions, session.id, newSlipMins)
+    const updates  = getCascadeUpdates(allDaySessions, cascaded)
+
+    if (updates.length === 0) { setApplying(null); return }
+
+    const results = await Promise.all(
+      updates.map(u =>
+        supabase.from('on_track_sessions').update({
+          slip_mins:         u.slip_mins,
+          cascade_slip_mins: u.cascade_slip_mins,
+          duration_override: u.duration_override,
+        }).eq('id', u.id)
+      )
+    )
+    const err = results.find(r => r.error)?.error
+    if (err) { toast('Error', err.message, 'danger') }
+    else {
+      const label = session.category ? `${session.category} — ${session.name}` : session.name
+      const slipDelta = newSlipMins - (session.slip_mins || 0)
+      // Write log entry
+      await supabase.from('slip_log').insert([{
+        event_id:        eventId,
+        session_id:      session.id,
+        day_id:          session.day_id,
+        session_name:    label,
+        added_mins:      slipDelta,
+        total_slip_mins: newSlipMins,
+        note:            slipDelta >= 0 ? `+${slipDelta}m slip (schedule edit)` : `${slipDelta}m reduction (schedule edit)`,
+        operator_id:     user?.id || null,
+      }])
+      reload()
+    }
+    setApplying(null)
+    setSlipInput(session.id, '')
+  }
+
+  async function applyQuickSlip(session, delta) {
+    await saveSlip(session, (session.slip_mins || 0) + delta)
+  }
+
+  async function applyCustomSlip(session) {
+    const raw = getSlipInput(session.id)
+    const val = parseInt(raw, 10)
+    if (!raw || isNaN(val)) return
+    // Treat as an absolute value if user types "10" (add), or relative if they type "+10"/"-5"
+    const abs = raw.startsWith('+') || raw.startsWith('-')
+      ? (session.slip_mins || 0) + val
+      : val
+    await saveSlip(session, abs)
+  }
+
+  async function resetSlip(session) {
+    await saveSlip(session, 0)
+  }
 
   async function toggleJoin(s) {
     if (!me) return
@@ -164,11 +235,14 @@ export default function ScheduleView() {
               const startDisp  = adjusted ? otStart(s) : s.start_mins
               const endDisp    = adjusted ? otEnd(s)   : s.start_mins + s.duration_mins
               const wx         = getWeather(activeDay_?.date, s.start_mins)
+              const isApplying = applying === s.id
+              const totalSlip  = (s.slip_mins || 0) + (s.cascade_slip_mins || 0)
 
               return (
                 <div
                   key={s.id}
                   className={`session-item ${adjusted ? 'slipped' : ''}`}
+                  style={{ flexWrap: 'wrap' }}
                 >
                   {/* Time */}
                   <div className={`s-time ${adjusted ? 'slipped' : ''}`}>
@@ -226,6 +300,60 @@ export default function ScheduleView() {
                   )}
                   {(s.cascade_slip_mins || 0) > 0 && (
                     <span className="slip-pill cascade" title="Auto-cascaded">↓ +{s.cascade_slip_mins}m</span>
+                  )}
+
+                  {/* ── Inline slip controls (ops+ only) ── */}
+                  {isOpsOrAbove && (
+                    <div style={slipControls}>
+                      {/* Quick-add buttons */}
+                      {QUICK_SLIPS.map(delta => (
+                        <button
+                          key={delta}
+                          className="btn btn-ghost btn-xs"
+                          style={quickSlipBtn}
+                          disabled={isApplying}
+                          onClick={() => applyQuickSlip(s, delta)}
+                          title={`Add ${delta} minute delay`}
+                        >
+                          +{delta}m
+                        </button>
+                      ))}
+
+                      {/* Custom input */}
+                      <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                        <input
+                          type="number"
+                          placeholder="mins"
+                          value={getSlipInput(s.id)}
+                          onChange={e => setSlipInput(s.id, e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && applyCustomSlip(s)}
+                          disabled={isApplying}
+                          style={slipInput}
+                          title="Enter total slip minutes (or +/-relative)"
+                        />
+                        <button
+                          className="btn btn-ghost btn-xs"
+                          disabled={isApplying || !getSlipInput(s.id)}
+                          onClick={() => applyCustomSlip(s)}
+                          style={{ padding: '3px 7px', fontSize: 11 }}
+                        >
+                          Set
+                        </button>
+                      </div>
+
+                      {/* Reset — only shown when slipped */}
+                      {totalSlip > 0 && (
+                        <button
+                          className="btn btn-ghost btn-xs"
+                          style={{ color: 'var(--warning)', borderColor: 'rgba(249,115,22,0.4)', fontSize: 11 }}
+                          disabled={isApplying}
+                          onClick={() => resetSlip(s)}
+                          title="Reset all slip to 0"
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
                   )}
 
                   {/* Join / Leave — visible to anyone with a person record */}
@@ -295,4 +423,36 @@ function badge(color, bg) {
     padding: '2px 7px', borderRadius: 4,
     whiteSpace: 'nowrap', flexShrink: 0,
   }
+}
+
+// ── Slip control styles ───────────────────────────────────────────────────────
+
+const slipControls = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 4,
+  flexWrap: 'wrap',
+  // Full-width row below the main session content
+  width: '100%',
+  padding: '8px 0 2px',
+  borderTop: '1px dashed var(--border)',
+  marginTop: 6,
+}
+
+const quickSlipBtn = {
+  fontSize: 11,
+  padding: '3px 8px',
+  color: 'var(--warning)',
+  borderColor: 'rgba(249,115,22,0.4)',
+  background: 'rgba(249,115,22,0.06)',
+}
+
+const slipInput = {
+  width: 64,
+  padding: '3px 6px',
+  fontSize: 11,
+  background: 'var(--surface2)',
+  border: '1px solid var(--border)',
+  color: 'var(--text)',
+  borderRadius: 'var(--radius)',
 }
