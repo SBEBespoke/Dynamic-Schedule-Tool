@@ -14,7 +14,7 @@ import WeatherWidget      from '../WeatherWidget'
 const QUICK_SLIPS = [5, 10, 15, 20]
 
 export default function ScheduleView() {
-  const { eventId, days, onTrack, people, reload } = useEvent()
+  const { eventId, days, onTrack, areaSessions, people, reload } = useEvent()
   const { getWeather, getDayWeather, dateInWindow } = useWeather(days)
   const { profile, user } = useAuth()
   const { effectiveIsOpsOrAbove: isOpsOrAbove, effectiveIsSuperAdmin: isSuperAdmin } = useViewAuth()
@@ -37,7 +37,7 @@ export default function ScheduleView() {
   function getSlipInput(id) { return slipInputs[id] ?? '' }
   function setSlipInput(id, val) { setSlipInputs(p => ({ ...p, [id]: val })) }
 
-  // ── Core cascade-save (no WhatsApp — use Live Update tab for day-of notifications) ──
+  // ── Core cascade-save with WhatsApp notifications ────────────────────────────
   async function saveSlip(session, newSlipMins) {
     if (newSlipMins < 0) { toast('Invalid', 'Slip cannot be negative', 'warn'); return }
     setApplying(session.id)
@@ -46,7 +46,7 @@ export default function ScheduleView() {
     const cascaded = applyCascade(allDaySessions, session.id, newSlipMins)
     const updates  = getCascadeUpdates(allDaySessions, cascaded)
 
-    if (updates.length === 0) { setApplying(null); return }
+    if (updates.length === 0) { setApplying(null); setSlipInput(session.id, ''); return }
 
     const results = await Promise.all(
       updates.map(u =>
@@ -58,25 +58,113 @@ export default function ScheduleView() {
       )
     )
     const err = results.find(r => r.error)?.error
-    if (err) { toast('Error', err.message, 'danger') }
-    else {
-      const label = session.category ? `${session.category} — ${session.name}` : session.name
-      const slipDelta = newSlipMins - (session.slip_mins || 0)
-      // Write log entry
-      await supabase.from('slip_log').insert([{
-        event_id:        eventId,
-        session_id:      session.id,
-        day_id:          session.day_id,
-        session_name:    label,
-        added_mins:      slipDelta,
-        total_slip_mins: newSlipMins,
-        note:            slipDelta >= 0 ? `+${slipDelta}m slip (schedule edit)` : `${slipDelta}m reduction (schedule edit)`,
-        operator_id:     user?.id || null,
-      }])
-      reload()
+    if (err) {
+      toast('Error', err.message, 'danger')
+      setApplying(null)
+      return
     }
+
+    const slipDelta = newSlipMins - (session.slip_mins || 0)
+    const label = session.category ? `${session.category} — ${session.name}` : session.name
+
+    // Write slip log entry
+    await supabase.from('slip_log').insert([{
+      event_id:        eventId,
+      session_id:      session.id,
+      day_id:          session.day_id,
+      session_name:    label,
+      added_mins:      slipDelta,
+      total_slip_mins: newSlipMins,
+      note:            slipDelta >= 0 ? `+${slipDelta}m slip (schedule edit)` : `${slipDelta}m reduction (schedule edit)`,
+      operator_id:     user?.id || null,
+    }])
+
+    // ── WhatsApp notifications ────────────────────────────────────────────────
+    if (slipDelta !== 0 && updates.length > 0) {
+      const changedIds  = new Set(updates.map(u => u.id))
+      const cascadedMap = new Map(cascaded.map(s => [s.id, s]))
+      const dayName     = sortedDays.find(d => d.id === activeDay)?.name || ''
+
+      // Activations whose start is driven by a changed on-track session
+      const affectedAreas   = areaSessions.filter(as =>
+        as.dep_type === 'after' && changedIds.has(as.dep_session_id)
+      )
+      const affectedAreaIds = new Set(affectedAreas.map(as => as.id))
+      const affectedAreaMap = new Map(affectedAreas.map(as => [as.id, as]))
+
+      const notifications = []
+      for (const person of people) {
+        if (!person.phone_whatsapp) continue
+
+        // On-track sessions this person is assigned to that moved
+        const onTrackLines = (person.people_on_track || [])
+          .filter(pot => changedIds.has(pot.session_id))
+          .map(pot => {
+            const s        = cascadedMap.get(pot.session_id)
+            if (!s) return null
+            const newStart = s.start_mins + (s.slip_mins || 0) + (s.cascade_slip_mins || 0)
+            const sOrig    = onTrack.find(o => o.id === pot.session_id)
+            const oldStart = sOrig
+              ? sOrig.start_mins + (sOrig.slip_mins || 0) + (sOrig.cascade_slip_mins || 0)
+              : null
+            const sessionLabel = s.category ? `${s.category} — ${s.name}` : s.name
+            const timeStr  = oldStart != null && oldStart !== newStart
+              ? `${fromMins(oldStart)} → ${fromMins(newStart)}`
+              : fromMins(newStart)
+            return `• ${sessionLabel}: ${timeStr}`
+          })
+          .filter(Boolean)
+
+        // Activations this person is assigned to that moved
+        const areaLines = (person.people_area_sessions || [])
+          .filter(pas => affectedAreaIds.has(pas.area_session_id))
+          .map(pas => {
+            const as     = affectedAreaMap.get(pas.area_session_id)
+            const linked = cascadedMap.get(as.dep_session_id)
+            if (linked) {
+              const linkedNewStart = linked.start_mins + (linked.slip_mins || 0) + (linked.cascade_slip_mins || 0)
+              const linkedDur      = linked.duration_override ?? linked.duration_mins
+              const linkedNewEnd   = linkedNewStart + linkedDur
+              const newStart       = linkedNewEnd + (as.dep_offset_mins || 0)
+              const linkedOrig     = onTrack.find(o => o.id === linked.id)
+              let oldStart = null
+              if (linkedOrig) {
+                const linkedOldStart = linkedOrig.start_mins + (linkedOrig.slip_mins || 0) + (linkedOrig.cascade_slip_mins || 0)
+                const linkedOldDur   = linkedOrig.duration_override ?? linkedOrig.duration_mins
+                oldStart = linkedOldStart + linkedOldDur + (as.dep_offset_mins || 0)
+              }
+              const timeStr = oldStart != null && oldStart !== newStart
+                ? `${fromMins(oldStart)} → ${fromMins(newStart)}`
+                : fromMins(newStart)
+              return `• ${as.name}: ${timeStr}`
+            }
+            return `• ${as.name}: ${fromMins(as.start_mins)}`
+          })
+
+        const allLines = [...onTrackLines, ...areaLines]
+        if (allLines.length > 0) notifications.push({ person, allLines })
+      }
+
+      for (const { person, allLines } of notifications) {
+        const message = slipDelta > 0
+          ? `⚠️ *Schedule Update — ADL Grand Final*\n\nThe following sessions on your schedule have moved:\n\n${allLines.join('\n')}\n\n📅 ${dayName}`
+          : `✅ *Schedule Recovery — ADL Grand Final*\n\nThe following sessions on your schedule have been updated:\n\n${allLines.join('\n')}\n\n📅 ${dayName}`
+
+        supabase.functions.invoke('send-whatsapp', {
+          body: { recipients: [{ name: person.name, phone: person.phone_whatsapp }], message },
+        }).catch(err => console.warn('WhatsApp notify failed:', err))
+      }
+    }
+
+    toast(
+      slipDelta > 0 ? `+${slipDelta}m slip applied` : slipDelta < 0 ? `${slipDelta}m recovered` : 'Updated',
+      label,
+      'success'
+    )
+
     setApplying(null)
     setSlipInput(session.id, '')
+    reload()
   }
 
   async function applyQuickSlip(session, delta) {
