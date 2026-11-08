@@ -137,6 +137,7 @@ function ExcelImport({ eventId, days, reload }) {
   const [mapping,  setMapping]  = useState({})
   const [importing, setImporting] = useState(false)
   const [result,   setResult]   = useState(null)
+  const [replaceAll, setReplaceAll] = useState(true)
 
   function handleExport() {
     if (!onTrack || onTrack.length === 0) {
@@ -214,6 +215,19 @@ function ExcelImport({ eventId, days, reload }) {
     setResult(null)
 
     let created = 0, skipped = 0, errors = []
+
+    // ── Delete existing sessions if Replace mode is on ──────────────
+    if (replaceAll) {
+      const { error: delErr } = await supabase
+        .from('on_track_sessions')
+        .delete()
+        .eq('event_id', eventId)
+      if (delErr) {
+        toast('Delete failed', delErr.message, 'danger')
+        setImporting(false)
+        return
+      }
+    }
 
     // Build a day lookup (name → id), creating days as needed
     const dayMap = {}
@@ -375,16 +389,39 @@ function ExcelImport({ eventId, days, reload }) {
         </div>
       )}
 
-      {/* Import button */}
+      {/* Import options + button */}
       {rows.length > 0 && (
-        <button
-          className="btn btn-primary"
-          onClick={handleImport}
-          disabled={importing}
-          style={{ marginBottom: 16 }}
-        >
-          {importing ? 'Importing…' : `⬆ Import ${rows.length} Sessions`}
-        </button>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12,
+            padding: '10px 14px', borderRadius: 8,
+            background: replaceAll ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)',
+            border: `1px solid ${replaceAll ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}`,
+          }}>
+            <input
+              type="checkbox"
+              id="replaceAll"
+              checked={replaceAll}
+              onChange={e => setReplaceAll(e.target.checked)}
+              style={{ width: 16, height: 16, cursor: 'pointer' }}
+            />
+            <label htmlFor="replaceAll" style={{ fontSize: 13, cursor: 'pointer', userSelect: 'none' }}>
+              <strong>Replace existing schedule</strong>
+              <span style={{ color: 'var(--text-dim)', marginLeft: 6 }}>
+                {replaceAll
+                  ? '— deletes all current sessions before importing'
+                  : '— adds new sessions without removing existing ones'}
+              </span>
+            </label>
+          </div>
+          <button
+            className="btn btn-primary"
+            onClick={handleImport}
+            disabled={importing}
+          >
+            {importing ? 'Importing…' : `⬆ ${replaceAll ? 'Replace Schedule' : 'Add'} (${rows.length} sessions)`}
+          </button>
+        </div>
       )}
 
       {/* Result */}
