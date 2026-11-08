@@ -129,6 +129,7 @@ const ALL_COLS = [...REQUIRED_COLS, ...OPTIONAL_COLS]
 
 function ExcelImport({ eventId, days, reload }) {
   const { toast } = useToast()
+  const { onTrack } = useEvent()
   const fileRef = useRef()
 
   const [headers,  setHeaders]  = useState([])
@@ -136,6 +137,38 @@ function ExcelImport({ eventId, days, reload }) {
   const [mapping,  setMapping]  = useState({})
   const [importing, setImporting] = useState(false)
   const [result,   setResult]   = useState(null)
+
+  function handleExport() {
+    if (!onTrack || onTrack.length === 0) {
+      toast('Nothing to export', 'No on-track sessions found', 'danger')
+      return
+    }
+    // Build a day lookup id → name
+    const dayNames = {}
+    days.forEach(d => { dayNames[d.id] = d.name })
+
+    const exportRows = onTrack.map(s => {
+      const totalMins = s.start_mins
+      const hh = String(Math.floor(totalMins / 60)).padStart(2, '0')
+      const mm = String(totalMins % 60).padStart(2, '0')
+      return {
+        'Day':            dayNames[s.day_id] || '',
+        'Session Name':   s.name || '',
+        'Category':       s.category || '',
+        'Start Time':     `${hh}:${mm}`,
+        'Duration (mins)': s.duration_mins || '',
+        'Notes':          s.notes || '',
+      }
+    })
+
+    const ws = XLSX.utils.json_to_sheet(exportRows, {
+      header: ['Day', 'Session Name', 'Category', 'Start Time', 'Duration (mins)', 'Notes'],
+    })
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Schedule')
+    XLSX.writeFile(wb, 'on-track-schedule.xlsx')
+    toast('Exported', `${exportRows.length} sessions downloaded`, 'success')
+  }
 
   function handleFile(e) {
     const file = e.target.files[0]
@@ -257,6 +290,19 @@ function ExcelImport({ eventId, days, reload }) {
 
   return (
     <div>
+      {/* Export */}
+      <div className="card" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+        <div>
+          <div className="card-label" style={{ marginBottom: 4 }}>Export Current Schedule</div>
+          <p style={{ fontSize: 13, color: 'var(--text-mid)', margin: 0 }}>
+            Download the current on-track sessions as an Excel file — use this as a template for re-importing.
+          </p>
+        </div>
+        <button className="btn btn-secondary" onClick={handleExport}>
+          ⬇ Export to Excel
+        </button>
+      </div>
+
       {/* Upload */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-label" style={{ marginBottom: 14 }}>Upload Schedule File</div>
