@@ -542,6 +542,23 @@ function ActivationsImport({ eventId, days, reload }) {
     return idx >= 0 ? String(row[idx] ?? '').trim() : ''
   }
 
+  // Returns raw cell value (number or string) — needed for Excel time serials
+  function getRaw(row, col) {
+    const header = mapping[col]
+    if (!header) return null
+    const idx = headers.indexOf(header)
+    return idx >= 0 ? (row[idx] ?? null) : null
+  }
+
+  // Parse a cell that may be an Excel time serial (fraction of day) or "HH:MM" string
+  function parseTimeMins(row, col) {
+    const raw = getRaw(row, col)
+    if (raw === null || raw === '') return 0
+    if (typeof raw === 'number') return Math.round(raw * 24 * 60)
+    const str = String(raw).trim()
+    return toMins(str.includes(':') ? str : str.padStart(5, '0'))
+  }
+
   // ── Import ──────────────────────────────────────────────────────────────
   async function handleImport() {
     for (const col of ACT_REQUIRED) {
@@ -615,8 +632,8 @@ function ActivationsImport({ eventId, days, reload }) {
         if (!depSessionId) errors.push(`Warning: OT session "${refName}" not found for "${name}" — start dep skipped`)
         depOffsetMins = parseInt(getVal(row, 'Start Offset (mins)') || '0', 10) || 0
       } else {
-        const timeStr = getVal(row, 'Start Time')
-        startMins = timeStr ? toMins(timeStr) : 0
+        // Use parseTimeMins to handle both Excel serial numbers and HH:MM strings
+        startMins = parseTimeMins(row, 'Start Time')
       }
 
       // Finish timing
