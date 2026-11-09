@@ -123,6 +123,13 @@ serve(async (req) => {
         .maybeSingle()
       if (dup) { skipped++; return }
 
+      // Skip if person has already acknowledged this session (suppresses reminder)
+      const { data: acked } = await db.from('session_acknowledgments').select('id')
+        .eq('session_id', sessionId).eq('session_type', sessionType)
+        .eq('person_id', person.id)
+        .maybeSingle()
+      if (acked) { skipped++; return }
+
       const day   = dayMap.get(dayId)
       const event = evtMap.get(eventId)
       const msg   = `⏰ *Reminder — ${event?.name ?? 'Event'}*\n\n` +

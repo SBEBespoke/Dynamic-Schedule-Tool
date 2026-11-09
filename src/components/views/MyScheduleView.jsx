@@ -60,8 +60,10 @@ export default function MyScheduleView() {
   const { profile, user } = useAuth()
   const { toast } = useToast()
 
-  const [checklistItems,  setChecklistItems]  = useState([])
-  const [savingChecklist, setSavingChecklist] = useState(null)
+  const [checklistItems,    setChecklistItems]    = useState([])
+  const [savingChecklist,   setSavingChecklist]   = useState(null)
+  const [acknowledgments,   setAcknowledgments]   = useState([])  // { session_id, session_type }
+  const [savingAck,         setSavingAck]         = useState(null)
 
   const sortedDays = [...days].sort((a, b) => a.sort_order - b.sort_order)
 
@@ -81,7 +83,18 @@ export default function MyScheduleView() {
     setChecklistItems(data || [])
   }
 
-  useEffect(() => { loadChecklist() }, [eventId, me?.id])
+  // Load session acknowledgments for this person
+  async function loadAcknowledgments() {
+    if (!me) return
+    const { data } = await supabase
+      .from('session_acknowledgments')
+      .select('session_id, session_type')
+      .eq('event_id', eventId)
+      .eq('person_id', me.id)
+    setAcknowledgments(data || [])
+  }
+
+  useEffect(() => { loadChecklist(); loadAcknowledgments() }, [eventId, me?.id])
 
   useEffect(() => {
     if (!me) return
@@ -91,6 +104,10 @@ export default function MyScheduleView() {
         event: '*', schema: 'public', table: 'checklist_items',
         filter: `event_id=eq.${eventId}`,
       }, loadChecklist)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'session_acknowledgments',
+        filter: `event_id=eq.${eventId}`,
+      }, loadAcknowledgments)
       .subscribe()
     return () => supabase.removeChannel(channel)
   }, [eventId, me?.id])
@@ -109,6 +126,33 @@ export default function MyScheduleView() {
     if (error) toast('Error', error.message, 'danger')
     else loadChecklist()
     setSavingChecklist(null)
+  }
+
+  // Toggle acknowledgment (suppresses WhatsApp reminder for this session)
+  async function toggleAck(sessionId, sessionType) {
+    if (!me) return
+    const key = `${sessionId}:${sessionType}`
+    setSavingAck(key)
+    const existing = acknowledgments.find(
+      a => a.session_id === sessionId && a.session_type === sessionType
+    )
+    if (existing) {
+      const { error } = await supabase
+        .from('session_acknowledgments')
+        .delete()
+        .eq('event_id', eventId)
+        .eq('session_id', sessionId)
+        .eq('session_type', sessionType)
+        .eq('person_id', me.id)
+      if (error) toast('Error', error.message, 'danger')
+    } else {
+      const { error } = await supabase
+        .from('session_acknowledgments')
+        .insert({ event_id: eventId, session_id: sessionId, session_type: sessionType, person_id: me.id })
+      if (error) toast('Error', error.message, 'danger')
+    }
+    await loadAcknowledgments()
+    setSavingAck(null)
   }
 
   // Build on-track + area session assignments
@@ -302,10 +346,20 @@ export default function MyScheduleView() {
                     {item.radio  && <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>📻 {item.radio}</div>}
                   </div>
 
-                  {/* Type badge */}
-                  <div style={typeBadge(item.type, item.slipped)}>
-                    {item.type === 'ontrack' ? 'On-Track' : 'Activation'}
-                  </div>
+                  {/* Right side: type badge + ack */}
+                  {(() => {
+                    const st = item.type === 'ontrack' ? 'on_track' : 'activation'
+                    const acked = acknowledgments.some(a => a.session_id === item.id && a.session_type === st)
+                    const saving = savingAck === `${item.id}:${st}`
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
+                        <div style={typeBadge(item.type, item.slipped)}>
+                          {item.type === 'ontrack' ? 'On-Track' : 'Activation'}
+                        </div>
+                        <AckButton acked={acked} saving={saving} onToggle={() => toggleAck(item.id, st)} />
+                      </div>
+                    )
+                  })()}
                 </div>
               )
             )}
@@ -523,4 +577,31 @@ function typeBadge(type, slipped) {
     flexShrink: 0,
     alignSelf: 'flex-start',
   }
+}
+
+// ── Acknowledgment button ─────────────────────────────────────────────────────
+
+function AckButton({ acked, saving, onToggle }) {
+  return (
+    <button
+      onClick={onToggle}
+      disabled={saving}
+      title={acked ? 'Got it — reminder suppressed. Tap to undo.' : 'Tap to acknowledge (stops WhatsApp reminder)'}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 5,
+        padding: '3px 9px',
+        borderRadius: 6,
+        border: `1px solid ${acked ? 'rgba(34,197,94,0.5)' : 'var(--border)'}`,
+        background: acked ? 'rgba(34,197,94,0.12)' : 'transparent',
+        color: acked ? '#22c55e' : 'var(--text-dim)',
+        fontSize: 11, fontWeight: 700,
+        cursor: saving ? 'wait' : 'pointer',
+        opacity: saving ? 0.6 : 1,
+        transition: 'all 0.15s',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {acked ? '✓ Got it' : '✓ Got it?'}
+    </button>
+  )
 }
