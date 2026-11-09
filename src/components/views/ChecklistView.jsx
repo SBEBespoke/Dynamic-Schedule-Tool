@@ -391,7 +391,11 @@ function ChecklistRow({ item, people, isOpsOrAbove, me, saving, onToggle, onEdit
               fontSize: 11,
               fontWeight: 700,
               fontVariantNumeric: 'tabular-nums',
-              color: isOverdue ? '#ef4444' : isSlipped ? 'var(--warning)' : item.completed ? 'var(--success)' : 'var(--text-dim)',
+              color: isOverdue ? '#ef4444' : isSlipped ? 'var(--warning)' : item.completed ? 'var(--success)' : 'var(--accent)',
+              background: isOverdue ? 'rgba(239,68,68,0.08)' : isSlipped ? 'rgba(249,115,22,0.08)' : 'rgba(99,102,241,0.08)',
+              border: `1px solid ${isOverdue ? 'rgba(239,68,68,0.3)' : isSlipped ? 'rgba(249,115,22,0.3)' : 'rgba(99,102,241,0.2)'}`,
+              borderRadius: 4,
+              padding: '1px 7px',
             }}>
               🕐 {fromMins(dueMins)}
               {isSlipped && (
@@ -402,6 +406,24 @@ function ChecklistRow({ item, people, isOpsOrAbove, me, saving, onToggle, onEdit
               {isOverdue && <span style={{ marginLeft: 4, fontWeight: 800, letterSpacing: '0.3px' }}>OVERDUE</span>}
             </span>
           )}
+
+          {/* Assigned person — shown to ops so they can see ownership at a glance */}
+          {isOpsOrAbove && item.person_id && (() => {
+            const owner = people.find(p => p.id === item.person_id)
+            return owner ? (
+              <span style={{
+                fontSize: 10,
+                fontWeight: 600,
+                color: 'var(--text-mid)',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: 4,
+                padding: '1px 7px',
+              }}>
+                👤 {owner.name}
+              </span>
+            ) : null
+          })()}
 
           {/* Edit / Delete — ops or the item's own owner */}
           {canManage && (
