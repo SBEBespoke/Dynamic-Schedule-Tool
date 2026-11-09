@@ -173,7 +173,7 @@ export default function ActivationsView() {
         <div className="activations-grid" style={columnsGrid}>
           {[0, 1, 2].map(colIdx => (
             <div key={colIdx} style={columnStyle}>
-              {areas
+              {[...areas].sort((a, b) => a.name.localeCompare(b.name))
                 .filter((_, i) => i % 3 === colIdx)
                 .map(area => {
                   const sessions = dayAreaSessions
