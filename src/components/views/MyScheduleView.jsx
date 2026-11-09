@@ -605,22 +605,21 @@ function AckButton({ acked, saving, onToggle }) {
     <button
       onClick={onToggle}
       disabled={saving}
-      title={acked ? 'Got it — reminder suppressed. Tap to undo.' : 'Tap to acknowledge (stops WhatsApp reminder)'}
+      title={acked ? 'Acknowledged — WhatsApp reminder suppressed. Tap to undo.' : 'Tap to acknowledge (stops WhatsApp reminder)'}
       style={{
-        display: 'flex', alignItems: 'center', gap: 5,
-        padding: '3px 9px',
+        width: 26, height: 26,
+        flexShrink: 0,
         borderRadius: 6,
-        border: `1px solid ${acked ? 'rgba(34,197,94,0.5)' : 'var(--border)'}`,
-        background: acked ? 'rgba(34,197,94,0.12)' : 'transparent',
-        color: acked ? '#22c55e' : 'var(--text-dim)',
-        fontSize: 11, fontWeight: 700,
+        border: `2px solid ${acked ? 'var(--success)' : 'var(--border)'}`,
+        background: acked ? 'var(--success)' : 'transparent',
+        color: '#fff', fontSize: 14, fontWeight: 700,
         cursor: saving ? 'wait' : 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
         opacity: saving ? 0.6 : 1,
         transition: 'all 0.15s',
-        whiteSpace: 'nowrap',
       }}
     >
-      {acked ? '✓ Got it' : '✓ Got it?'}
+      {acked ? '✓' : ''}
     </button>
   )
 }
