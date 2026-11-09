@@ -123,6 +123,14 @@ export default function ActivationsView() {
 
   return (
     <div>
+      <style>{`
+        @media (max-width: 700px) {
+          .activations-grid { grid-template-columns: 1fr !important; }
+        }
+        @media (min-width: 701px) and (max-width: 1050px) {
+          .activations-grid { grid-template-columns: repeat(2, 1fr) !important; }
+        }
+      `}</style>
       {/* ── Day tabs ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
         <div className="day-tabs" style={{ margin: 0 }}>
@@ -325,13 +333,13 @@ export default function ActivationsView() {
 // ── Style helpers ─────────────────────────────────────────────────────────────
 
 const columnsGrid = {
-  display: 'flex',
-  gap:     12,
-  alignItems: 'flex-start',
+  display:             'grid',
+  gridTemplateColumns: 'repeat(3, 1fr)',
+  gap:                 12,
+  alignItems:          'flex-start',
 }
 
 const columnStyle = {
-  flex:          1,
   display:       'flex',
   flexDirection: 'column',
   gap:           12,
