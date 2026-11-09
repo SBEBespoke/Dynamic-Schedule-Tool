@@ -214,29 +214,27 @@ export default function MyScheduleView() {
     return result
   }, [me, onTrack, areaSessions, areas])
 
-  // Build checklist tasks with due times for the schedule timeline
+  // Build checklist tasks — timed ones go in the timeline, untimed ones go below
   const myChecklist = useMemo(() => {
     if (!me) return []
-    return checklistItems
-      .map(c => {
-        const dueMins       = getDueMins(c, onTrack, areaSessions)
-        const scheduledMins = getScheduledDueMins(c, onTrack, areaSessions)
-        if (dueMins == null) return null   // no due time = won't appear in timeline
-        const isLinked  = c.dep_type === 'on_track' || c.dep_type === 'area_session'
-        const isSlipped = isLinked && scheduledMins != null && dueMins !== scheduledMins
-        return {
-          id:             c.id,
-          dayId:          c.day_id,
-          type:           'checklist',
-          label:          c.title,
-          start:          dueMins,
-          scheduledStart: scheduledMins,
-          slipped:        isSlipped,
-          completed:      c.completed,
-          completed_at:   c.completed_at,
-        }
-      })
-      .filter(Boolean)
+    return checklistItems.map(c => {
+      const dueMins       = getDueMins(c, onTrack, areaSessions)
+      const scheduledMins = getScheduledDueMins(c, onTrack, areaSessions)
+      const isLinked  = c.dep_type === 'on_track' || c.dep_type === 'area_session'
+      const isSlipped = isLinked && scheduledMins != null && dueMins != null && dueMins !== scheduledMins
+      return {
+        id:             c.id,
+        dayId:          c.day_id,
+        type:           'checklist',
+        label:          c.title,
+        start:          dueMins,          // null = no time set
+        scheduledStart: scheduledMins,
+        slipped:        isSlipped,
+        completed:      c.completed,
+        completed_at:   c.completed_at,
+        hasDueTime:     dueMins != null,
+      }
+    })
   }, [checklistItems, onTrack, areaSessions, me])
 
   // ── Empty / unlinked states ──
@@ -255,7 +253,7 @@ export default function MyScheduleView() {
   }
 
   const totalItems     = myAssignments.length + myChecklist.length
-  const slippedCount   = [...myAssignments, ...myChecklist].filter(s => s.slipped).length
+  const slippedCount   = [...myAssignments, ...myChecklist.filter(c => c.hasDueTime)].filter(s => s.slipped).length
   const tasksDone      = myChecklist.filter(c => c.completed).length
   const tasksTotal     = myChecklist.length
 
@@ -297,17 +295,19 @@ export default function MyScheduleView() {
 
       {/* Combined timeline by day */}
       {sortedDays.map(day => {
-        const daySessions  = myAssignments.filter(s => s.dayId === day.id)
-        const dayTasks     = myChecklist.filter(c => c.dayId === day.id)
-        const allItems     = [...daySessions, ...dayTasks].sort((a, b) => a.start - b.start)
+        const daySessions   = myAssignments.filter(s => s.dayId === day.id)
+        const dayAllTasks   = myChecklist.filter(c => c.dayId === day.id)
+        const dayTimedTasks = dayAllTasks.filter(c => c.hasDueTime)
+        const dayUntimedTasks = dayAllTasks.filter(c => !c.hasDueTime)
+        const timedItems    = [...daySessions, ...dayTimedTasks].sort((a, b) => a.start - b.start)
 
-        if (allItems.length === 0) return null
+        if (timedItems.length === 0 && dayUntimedTasks.length === 0) return null
 
         return (
           <div key={day.id} style={{ marginBottom: 28 }}>
             <div style={dayHeader}>{day.name}</div>
 
-            {allItems.map(item =>
+            {timedItems.map(item =>
               item.type === 'checklist' ? (
                 <ChecklistTaskCard
                   key={`cl-${item.id}`}
@@ -363,6 +363,25 @@ export default function MyScheduleView() {
                 </div>
               )
             )}
+
+            {/* Untimed tasks — no due time set, shown below the timeline */}
+            {dayUntimedTasks.length > 0 && (
+              <div style={{ marginTop: timedItems.length > 0 ? 10 : 0 }}>
+                {timedItems.length > 0 && (
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase',
+                    color: 'var(--text-dim)', marginBottom: 6, paddingLeft: 2 }}>Tasks</div>
+                )}
+                {dayUntimedTasks.map(item => (
+                  <ChecklistTaskCard
+                    key={`cl-unt-${item.id}`}
+                    item={item}
+                    day={day}
+                    onToggle={toggleChecklist}
+                    saving={savingChecklist === item.id}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )
       })}
@@ -374,7 +393,7 @@ export default function MyScheduleView() {
 
 function ChecklistTaskCard({ item, day, onToggle, saving }) {
   const nowMins   = new Date().getHours() * 60 + new Date().getMinutes()
-  const isOverdue = !item.completed && item.start < nowMins && isDayOverduable(day)
+  const isOverdue = !item.completed && item.start != null && item.start < nowMins && isDayOverduable(day)
 
   return (
     <div style={taskCard(item.completed, item.slipped, isOverdue)}>
