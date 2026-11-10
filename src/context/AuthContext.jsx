@@ -1,13 +1,18 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
+// Captured synchronously at module load â before Supabase processes the URL hash
+const _hash = window.location.hash
+const _hashType = new URLSearchParams(_hash.startsWith('#') ? _hash.slice(1) : '').get('type')
+const _startsWithPasswordFlow = _hashType === 'invite' || _hashType === 'recovery'
+
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [user,             setUser]             = useState(null)
   const [profile,          setProfile]          = useState(null)
   const [loading,          setLoading]          = useState(true)
-  const [needsPasswordSet, setNeedsPasswordSet] = useState(false)
+  const [needsPasswordSet, setNeedsPasswordSet] = useState(_startsWithPasswordFlow)
 
   const loadProfile = useCallback(async (userId) => {
     const { data, error } = await supabase
@@ -21,14 +26,6 @@ export function AuthProvider({ children }) {
   }, [])
 
   useEffect(() => {
-    // Check URL hash for invite or recovery token BEFORE Supabase processes it
-    const hash = window.location.hash
-    const hashParams = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash)
-    const tokenType = hashParams.get('type')
-    if (tokenType === 'invite' || tokenType === 'recovery') {
-      setNeedsPasswordSet(true)
-    }
-
     // Restore existing session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
