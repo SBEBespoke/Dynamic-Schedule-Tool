@@ -1,10 +1,10 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
-// Captured synchronously at module load â before Supabase processes the URL hash
-const _hash = window.location.hash
-const _hashType = new URLSearchParams(_hash.startsWith('#') ? _hash.slice(1) : '').get('type')
-const _startsWithPasswordFlow = _hashType === 'invite' || _hashType === 'recovery'
+// Captured in index.html before any module loads â window.__initialHashType is set
+// there so Supabase can't clear the hash before we read it
+const _startsWithPasswordFlow =
+  window.__initialHashType === 'invite' || window.__initialHashType === 'recovery'
 
 const AuthContext = createContext(null)
 
