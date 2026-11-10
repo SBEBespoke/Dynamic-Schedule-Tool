@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 
 export default function LoginPage() {
-  const { signIn, isAuthenticated } = useAuth()
+  const { signIn, isAuthenticated, needsPasswordSet, setNeedsPasswordSet } = useAuth()
   const navigate = useNavigate()
 
   const [tab, setTab] = useState('signin') // 'signin' | 'signup' | 'forgot'
@@ -24,11 +24,17 @@ export default function LoginPage() {
   const [forgotEmail, setForgotEmail] = useState('')
   const [forgotSent,  setForgotSent]  = useState(false)
 
+  // Set password (after magic link invite or password reset)
+  const [newPassword,     setNewPassword]     = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordSet,     setPasswordSet]     = useState(false)
+
   // Shared
   const [error,   setError]   = useState('')
   const [loading, setLoading] = useState(false)
 
-  if (isAuthenticated) {
+  // If authenticated and password already confirmed â go to app
+  if (isAuthenticated && !needsPasswordSet) {
     navigate('/events', { replace: true })
     return null
   }
@@ -38,7 +44,7 @@ export default function LoginPage() {
     setError('')
   }
 
-  // ── Sign In ──────────────────────────────────────────────────────────────────
+  // ââ Sign In ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   async function handleSignIn(e) {
     e.preventDefault()
     setError('')
@@ -53,7 +59,7 @@ export default function LoginPage() {
     }
   }
 
-  // ── Sign Up ──────────────────────────────────────────────────────────────────
+  // ââ Sign Up ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   async function handleSignUp(e) {
     e.preventDefault()
     setError('')
@@ -76,7 +82,27 @@ export default function LoginPage() {
     }
   }
 
-  // ── Forgot Password ───────────────────────────────────────────────────────────
+  // ââ Set Password (after invite or password reset link) âââââââââââââââââââââââ
+  async function handleSetPassword(e) {
+    e.preventDefault()
+    setError('')
+    if (newPassword.length < 6) { setError('Password must be at least 6 characters.'); return }
+    if (newPassword !== confirmPassword) { setError('Passwords do not match.'); return }
+    setLoading(true)
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
+      if (updateError) throw updateError
+      setPasswordSet(true)
+      setNeedsPasswordSet(false)
+      navigate('/events', { replace: true })
+    } catch (err) {
+      setError(err.message || 'Failed to set password. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ââ Forgot Password âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   async function handleForgot(e) {
     e.preventDefault()
     setError('')
@@ -101,13 +127,69 @@ export default function LoginPage() {
 
         {/* Logo / title */}
         <div style={styles.header}>
-          <div style={styles.logo}>📋</div>
+          <div style={styles.logo}>ð</div>
           <div style={styles.title}>LIVE SCHEDULE MANAGER</div>
           <div style={styles.sub}>SBE Bespoke Events</div>
         </div>
 
-        {/* Tab bar — only shown for signin / signup */}
-        {tab !== 'forgot' && (
+        {/* ââ Set Password (invite / reset flow) ââ */}
+        {needsPasswordSet && (
+          passwordSet ? (
+            <div style={styles.successBox}>
+              <div style={{ fontSize: 22, marginBottom: 8 }}>â</div>
+              <strong>Password set!</strong>
+              <p style={{ fontSize: 13, color: 'var(--text-mid)', margin: '8px 0 0' }}>
+                Taking you inâ¦
+              </p>
+            </div>
+          ) : (
+            <>
+              <div style={{ marginBottom: 18 }}>
+                <div style={styles.title}>Set Your Password</div>
+                <p style={{ fontSize: 13, color: 'var(--text-mid)', marginTop: 8, lineHeight: 1.6 }}>
+                  Choose a password so you can sign in again in the future.
+                </p>
+              </div>
+              <form onSubmit={handleSetPassword}>
+                <div className="form-group" style={{ marginBottom: 14 }}>
+                  <label>New Password</label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    placeholder="Min. 6 characters"
+                    required
+                    autoFocus
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 6 }}>
+                  <label>Confirm Password</label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    placeholder="Repeat password"
+                    required
+                    autoComplete="new-password"
+                  />
+                </div>
+                {error && <div style={styles.errorBox}>{error}</div>}
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ width: '100%', justifyContent: 'center', padding: '11px', marginTop: 16 }}
+                  disabled={loading}
+                >
+                  {loading ? 'Setting passwordâ¦' : 'Set Password & Continue'}
+                </button>
+              </form>
+            </>
+          )
+        )}
+
+        {/* Tab bar â only shown for signin / signup */}
+        {!needsPasswordSet && tab !== 'forgot' && (
           <div style={styles.tabs}>
             <button
               style={{ ...styles.tab, ...(tab === 'signin' ? styles.tabActive : {}) }}
@@ -120,8 +202,8 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* ── Sign In form ── */}
-        {tab === 'signin' && (
+        {/* ââ Sign In form ââ */}
+        {!needsPasswordSet && tab === 'signin' && (
           <form onSubmit={handleSignIn}>
             <div className="form-group" style={{ marginBottom: 14 }}>
               <label>Email</label>
@@ -141,7 +223,7 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="â¢â¢â¢â¢â¢â¢â¢â¢"
                 required
                 autoComplete="current-password"
               />
@@ -159,19 +241,19 @@ export default function LoginPage() {
               style={{ width: '100%', justifyContent: 'center', padding: '11px', marginTop: 16 }}
               disabled={loading}
             >
-              {loading ? 'Signing in…' : 'Sign In'}
+              {loading ? 'Signing inâ¦' : 'Sign In'}
             </button>
           </form>
         )}
 
-        {/* ── Request Access (Sign Up) form ── */}
-        {tab === 'signup' && (
+        {/* ââ Request Access (Sign Up) form ââ */}
+        {!needsPasswordSet && tab === 'signup' && (
           signupSuccess ? (
             <div style={styles.successBox}>
-              <div style={{ fontSize: 22, marginBottom: 8 }}>✅</div>
+              <div style={{ fontSize: 22, marginBottom: 8 }}>â</div>
               <strong>Account created!</strong>
               <p style={{ fontSize: 13, color: 'var(--text-mid)', margin: '8px 0 16px' }}>
-                You can now sign in with your email and password. Your account has been set up as <strong>Team Member</strong> access — contact your administrator if you need a different access level.
+                You can now sign in with your email and password. Your account has been set up as <strong>Team Member</strong> access â contact your administrator if you need a different access level.
               </p>
               <button
                 type="button"
@@ -236,7 +318,7 @@ export default function LoginPage() {
                 style={{ width: '100%', justifyContent: 'center', padding: '11px', marginTop: 12 }}
                 disabled={loading}
               >
-                {loading ? 'Creating account…' : 'Create Account'}
+                {loading ? 'Creating accountâ¦' : 'Create Account'}
               </button>
 
               <p style={styles.hint}>
@@ -246,11 +328,11 @@ export default function LoginPage() {
           )
         )}
 
-        {/* ── Forgot Password ── */}
-        {tab === 'forgot' && (
+        {/* ââ Forgot Password ââ */}
+        {!needsPasswordSet && tab === 'forgot' && (
           forgotSent ? (
             <div style={styles.successBox}>
-              <div style={{ fontSize: 22, marginBottom: 8 }}>📬</div>
+              <div style={{ fontSize: 22, marginBottom: 8 }}>ð¬</div>
               <strong>Reset email sent!</strong>
               <p style={{ fontSize: 13, color: 'var(--text-mid)', margin: '8px 0 16px' }}>
                 Check your inbox for a link to reset your password.
@@ -297,7 +379,7 @@ export default function LoginPage() {
                     style={{ flex: 1, justifyContent: 'center' }}
                     disabled={loading}
                   >
-                    {loading ? 'Sending…' : 'Send Reset Link'}
+                    {loading ? 'Sendingâ¦' : 'Send Reset Link'}
                   </button>
                 </div>
               </form>
@@ -309,7 +391,7 @@ export default function LoginPage() {
   )
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
+// ââ Styles ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 const styles = {
   page: {
