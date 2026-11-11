@@ -36,7 +36,7 @@ export function EventProvider({ children }) {
         supabase.from('events').select('*').eq('id', eventId).single(),
         supabase.from('days').select('*').eq('event_id', eventId).order('sort_order'),
         supabase.from('on_track_sessions').select('*').eq('event_id', eventId).order('start_mins'),
-        supabase.from('areas').select('*').eq('event_id', eventId),
+        supabase.from('areas').select('*').eq('event_id', eventId).order('name'),
         supabase.from('area_sessions').select('*').eq('event_id', eventId),
         supabase.from('people').select('*, people_on_track(session_id), people_area_sessions(area_session_id)').eq('event_id', eventId),
         supabase.from('departments').select('*').eq('event_id', eventId).order('sort_order'),

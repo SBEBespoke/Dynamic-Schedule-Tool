@@ -1,12 +1,18 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
+// Captured in index.html before any module loads — window.__initialHashType is set
+// there so Supabase can't clear the hash before we read it
+const _startsWithPasswordFlow =
+  window.__initialHashType === 'invite' || window.__initialHashType === 'recovery'
+
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user,    setUser]    = useState(null)
-  const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [user,             setUser]             = useState(null)
+  const [profile,          setProfile]          = useState(null)
+  const [loading,          setLoading]          = useState(true)
+  const [needsPasswordSet, setNeedsPasswordSet] = useState(_startsWithPasswordFlow)
 
   const loadProfile = useCallback(async (userId) => {
     const { data, error } = await supabase
@@ -28,7 +34,10 @@ export function AuthProvider({ children }) {
     })
 
     // Listen for auth state changes (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setNeedsPasswordSet(true)
+      }
       setUser(session?.user ?? null)
       if (session?.user) loadProfile(session.user.id)
       else setProfile(null)
@@ -63,6 +72,8 @@ export function AuthProvider({ children }) {
       isSuperAdmin,
       isOpsOrAbove,
       isAuthenticated,
+      needsPasswordSet,
+      setNeedsPasswordSet,
       signIn,
       signOut,
       reloadProfile: () => user && loadProfile(user.id),

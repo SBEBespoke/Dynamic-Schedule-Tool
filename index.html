@@ -9,6 +9,12 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Capture hash type before ANY module loads (Supabase clears it during init) -->
+    <script>
+      window.__initialHashType = new URLSearchParams(
+        window.location.hash.startsWith('#') ? window.location.hash.slice(1) : ''
+      ).get('type');
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
