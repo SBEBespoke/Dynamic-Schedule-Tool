@@ -68,10 +68,11 @@ function EventConfig({ event, eventId, reload }) {
   const { toast } = useToast()
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
-    name:       event?.name       || '',
-    venue:      event?.venue      || '',
-    start_date: event?.start_date || '',
-    end_date:   event?.end_date   || '',
+    name:            event?.name            || '',
+    venue:           event?.venue           || '',
+    start_date:      event?.start_date      || '',
+    end_date:        event?.end_date        || '',
+    pam_nav_map_id:  event?.pam_nav_map_id  || '',
   })
 
   function set(key, val) { setForm(f => ({ ...f, [key]: val })) }
@@ -80,10 +81,11 @@ function EventConfig({ event, eventId, reload }) {
     e.preventDefault()
     setSaving(true)
     const { error } = await supabase.from('events').update({
-      name:       form.name.trim(),
-      venue:      form.venue.trim() || null,
-      start_date: form.start_date  || null,
-      end_date:   form.end_date    || null,
+      name:           form.name.trim(),
+      venue:          form.venue.trim() || null,
+      start_date:     form.start_date  || null,
+      end_date:       form.end_date    || null,
+      pam_nav_map_id: form.pam_nav_map_id.trim() || null,
     }).eq('id', eventId)
 
     if (error) toast('Error', error.message, 'danger')
@@ -102,6 +104,17 @@ function EventConfig({ event, eventId, reload }) {
         <div className="form-group" style={{ marginBottom: 14 }}>
           <label>Venue</label>
           <input value={form.venue} onChange={e => set('venue', e.target.value)} placeholder="e.g. Adelaide Parklands Circuit" />
+        </div>
+        <div className="form-group" style={{ marginBottom: 14 }}>
+          <label>PAM SmartMap ID</label>
+          <input
+            value={form.pam_nav_map_id}
+            onChange={e => set('pam_nav_map_id', e.target.value)}
+            placeholder="e.g. 0ecdfc1f-4e42-4c76-af14-32d3bf149b99"
+          />
+          <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 4 }}>
+            The <code>navmapId</code> from your PAM SmartMap URL. Enables directions links on activation cards.
+          </div>
         </div>
         <div className="form-row">
           <div className="form-group">

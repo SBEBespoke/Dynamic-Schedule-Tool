@@ -56,12 +56,14 @@ function getScheduledDueMins(item, onTrack, areaSessions) {
 // ── Main view ─────────────────────────────────────────────────────────────────
 
 export default function MyScheduleView() {
-  const { eventId, days, onTrack, areas, areaSessions, people } = useEvent()
+  const { event, eventId, days, onTrack, areas, areaSessions, people } = useEvent()
   const { profile, user } = useAuth()
   const { toast } = useToast()
 
-  const [checklistItems,  setChecklistItems]  = useState([])
-  const [savingChecklist, setSavingChecklist] = useState(null)
+  const [checklistItems,    setChecklistItems]    = useState([])
+  const [savingChecklist,   setSavingChecklist]   = useState(null)
+  const [acknowledgments,   setAcknowledgments]   = useState([])  // { session_id, session_type }
+  const [savingAck,         setSavingAck]         = useState(null)
 
   const sortedDays = [...days].sort((a, b) => a.sort_order - b.sort_order)
 
@@ -81,7 +83,18 @@ export default function MyScheduleView() {
     setChecklistItems(data || [])
   }
 
-  useEffect(() => { loadChecklist() }, [eventId, me?.id])
+  // Load session acknowledgments for this person
+  async function loadAcknowledgments() {
+    if (!me) return
+    const { data } = await supabase
+      .from('session_acknowledgments')
+      .select('session_id, session_type')
+      .eq('event_id', eventId)
+      .eq('person_id', me.id)
+    setAcknowledgments(data || [])
+  }
+
+  useEffect(() => { loadChecklist(); loadAcknowledgments() }, [eventId, me?.id])
 
   useEffect(() => {
     if (!me) return
@@ -91,6 +104,10 @@ export default function MyScheduleView() {
         event: '*', schema: 'public', table: 'checklist_items',
         filter: `event_id=eq.${eventId}`,
       }, loadChecklist)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'session_acknowledgments',
+        filter: `event_id=eq.${eventId}`,
+      }, loadAcknowledgments)
       .subscribe()
     return () => supabase.removeChannel(channel)
   }, [eventId, me?.id])
@@ -109,6 +126,33 @@ export default function MyScheduleView() {
     if (error) toast('Error', error.message, 'danger')
     else loadChecklist()
     setSavingChecklist(null)
+  }
+
+  // Toggle acknowledgment (suppresses WhatsApp reminder for this session)
+  async function toggleAck(sessionId, sessionType) {
+    if (!me) return
+    const key = `${sessionId}:${sessionType}`
+    setSavingAck(key)
+    const existing = acknowledgments.find(
+      a => a.session_id === sessionId && a.session_type === sessionType
+    )
+    if (existing) {
+      const { error } = await supabase
+        .from('session_acknowledgments')
+        .delete()
+        .eq('event_id', eventId)
+        .eq('session_id', sessionId)
+        .eq('session_type', sessionType)
+        .eq('person_id', me.id)
+      if (error) toast('Error', error.message, 'danger')
+    } else {
+      const { error } = await supabase
+        .from('session_acknowledgments')
+        .insert({ event_id: eventId, session_id: sessionId, session_type: sessionType, person_id: me.id })
+      if (error) toast('Error', error.message, 'danger')
+    }
+    await loadAcknowledgments()
+    setSavingAck(null)
   }
 
   // Build on-track + area session assignments
@@ -164,35 +208,35 @@ export default function MyScheduleView() {
         notes:          null,
         radio:          me.radio_channel || null,
         color:          area?.color || null,
+        areaLat:        area?.lat  ?? null,
+        areaLng:        area?.lng  ?? null,
       })
     })
 
     return result
   }, [me, onTrack, areaSessions, areas])
 
-  // Build checklist tasks with due times for the schedule timeline
+  // Build checklist tasks — timed ones go in the timeline, untimed ones go below
   const myChecklist = useMemo(() => {
     if (!me) return []
-    return checklistItems
-      .map(c => {
-        const dueMins       = getDueMins(c, onTrack, areaSessions)
-        const scheduledMins = getScheduledDueMins(c, onTrack, areaSessions)
-        if (dueMins == null) return null   // no due time = won't appear in timeline
-        const isLinked  = c.dep_type === 'on_track' || c.dep_type === 'area_session'
-        const isSlipped = isLinked && scheduledMins != null && dueMins !== scheduledMins
-        return {
-          id:             c.id,
-          dayId:          c.day_id,
-          type:           'checklist',
-          label:          c.title,
-          start:          dueMins,
-          scheduledStart: scheduledMins,
-          slipped:        isSlipped,
-          completed:      c.completed,
-          completed_at:   c.completed_at,
-        }
-      })
-      .filter(Boolean)
+    return checklistItems.map(c => {
+      const dueMins       = getDueMins(c, onTrack, areaSessions)
+      const scheduledMins = getScheduledDueMins(c, onTrack, areaSessions)
+      const isLinked  = c.dep_type === 'on_track' || c.dep_type === 'area_session'
+      const isSlipped = isLinked && scheduledMins != null && dueMins != null && dueMins !== scheduledMins
+      return {
+        id:             c.id,
+        dayId:          c.day_id,
+        type:           'checklist',
+        label:          c.title,
+        start:          dueMins,          // null = no time set
+        scheduledStart: scheduledMins,
+        slipped:        isSlipped,
+        completed:      c.completed,
+        completed_at:   c.completed_at,
+        hasDueTime:     dueMins != null,
+      }
+    })
   }, [checklistItems, onTrack, areaSessions, me])
 
   // ── Empty / unlinked states ──
@@ -211,7 +255,7 @@ export default function MyScheduleView() {
   }
 
   const totalItems     = myAssignments.length + myChecklist.length
-  const slippedCount   = [...myAssignments, ...myChecklist].filter(s => s.slipped).length
+  const slippedCount   = [...myAssignments, ...myChecklist.filter(c => c.hasDueTime)].filter(s => s.slipped).length
   const tasksDone      = myChecklist.filter(c => c.completed).length
   const tasksTotal     = myChecklist.length
 
@@ -253,17 +297,19 @@ export default function MyScheduleView() {
 
       {/* Combined timeline by day */}
       {sortedDays.map(day => {
-        const daySessions  = myAssignments.filter(s => s.dayId === day.id)
-        const dayTasks     = myChecklist.filter(c => c.dayId === day.id)
-        const allItems     = [...daySessions, ...dayTasks].sort((a, b) => a.start - b.start)
+        const daySessions   = myAssignments.filter(s => s.dayId === day.id)
+        const dayAllTasks   = myChecklist.filter(c => c.dayId === day.id)
+        const dayTimedTasks = dayAllTasks.filter(c => c.hasDueTime)
+        const dayUntimedTasks = dayAllTasks.filter(c => !c.hasDueTime)
+        const timedItems    = [...daySessions, ...dayTimedTasks].sort((a, b) => a.start - b.start)
 
-        if (allItems.length === 0) return null
+        if (timedItems.length === 0 && dayUntimedTasks.length === 0) return null
 
         return (
           <div key={day.id} style={{ marginBottom: 28 }}>
             <div style={dayHeader}>{day.name}</div>
 
-            {allItems.map(item =>
+            {timedItems.map(item =>
               item.type === 'checklist' ? (
                 <ChecklistTaskCard
                   key={`cl-${item.id}`}
@@ -300,14 +346,51 @@ export default function MyScheduleView() {
                     )}
                     {item.notes && <div style={notesStyle}>{item.notes}</div>}
                     {item.radio  && <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>📻 {item.radio}</div>}
+                    {item.type === 'area' && event?.pam_nav_map_id && item.areaLat != null && item.areaLng != null && (
+                      <a
+                        href={`https://connect.ap.app.pam.co/?navmapId=${event.pam_nav_map_id}#18/${item.areaLat}/${item.areaLng}/0/0`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={directionsLink}
+                      >📍 Directions</a>
+                    )}
                   </div>
 
-                  {/* Type badge */}
-                  <div style={typeBadge(item.type, item.slipped)}>
-                    {item.type === 'ontrack' ? 'On-Track' : 'Activation'}
-                  </div>
+                  {/* Right side: type badge + ack */}
+                  {(() => {
+                    const st = item.type === 'ontrack' ? 'on_track' : 'activation'
+                    const acked = acknowledgments.some(a => a.session_id === item.id && a.session_type === st)
+                    const saving = savingAck === `${item.id}:${st}`
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
+                        <div style={typeBadge(item.type, item.slipped)}>
+                          {item.type === 'ontrack' ? 'On-Track' : 'Activation'}
+                        </div>
+                        <AckButton acked={acked} saving={saving} onToggle={() => toggleAck(item.id, st)} />
+                      </div>
+                    )
+                  })()}
                 </div>
               )
+            )}
+
+            {/* Untimed tasks — no due time set, shown below the timeline */}
+            {dayUntimedTasks.length > 0 && (
+              <div style={{ marginTop: timedItems.length > 0 ? 10 : 0 }}>
+                {timedItems.length > 0 && (
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase',
+                    color: 'var(--text-dim)', marginBottom: 6, paddingLeft: 2 }}>Tasks</div>
+                )}
+                {dayUntimedTasks.map(item => (
+                  <ChecklistTaskCard
+                    key={`cl-unt-${item.id}`}
+                    item={item}
+                    day={day}
+                    onToggle={toggleChecklist}
+                    saving={savingChecklist === item.id}
+                  />
+                ))}
+              </div>
             )}
           </div>
         )
@@ -320,7 +403,7 @@ export default function MyScheduleView() {
 
 function ChecklistTaskCard({ item, day, onToggle, saving }) {
   const nowMins   = new Date().getHours() * 60 + new Date().getMinutes()
-  const isOverdue = !item.completed && item.start < nowMins && isDayOverduable(day)
+  const isOverdue = !item.completed && item.start != null && item.start < nowMins && isDayOverduable(day)
 
   return (
     <div style={taskCard(item.completed, item.slipped, isOverdue)}>
@@ -507,6 +590,21 @@ const notesStyle = {
   borderLeft: '3px solid var(--accent)',
 }
 
+const directionsLink = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
+  fontSize: 11,
+  fontWeight: 700,
+  color: 'var(--accent)',
+  textDecoration: 'none',
+  background: 'rgba(99,102,241,0.08)',
+  border: '1px solid rgba(99,102,241,0.25)',
+  borderRadius: 4,
+  padding: '3px 8px',
+  alignSelf: 'flex-start',
+}
+
 function typeBadge(type, slipped) {
   const isOT = type === 'ontrack'
   return {
@@ -523,4 +621,30 @@ function typeBadge(type, slipped) {
     flexShrink: 0,
     alignSelf: 'flex-start',
   }
+}
+
+// ── Acknowledgment button ─────────────────────────────────────────────────────
+
+function AckButton({ acked, saving, onToggle }) {
+  return (
+    <button
+      onClick={onToggle}
+      disabled={saving}
+      title={acked ? 'Acknowledged — WhatsApp reminder suppressed. Tap to undo.' : 'Tap to acknowledge (stops WhatsApp reminder)'}
+      style={{
+        width: 26, height: 26,
+        flexShrink: 0,
+        borderRadius: 6,
+        border: `2px solid ${acked ? 'var(--success)' : 'var(--border)'}`,
+        background: acked ? 'var(--success)' : 'transparent',
+        color: '#fff', fontSize: 14, fontWeight: 700,
+        cursor: saving ? 'wait' : 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        opacity: saving ? 0.6 : 1,
+        transition: 'all 0.15s',
+      }}
+    >
+      {acked ? '✓' : ''}
+    </button>
+  )
 }

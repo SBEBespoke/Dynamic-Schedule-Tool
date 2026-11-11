@@ -20,6 +20,8 @@ export default function AddEditAreaModal({ area, eventId, onClose, onSaved }) {
   const [form, setForm] = useState({
     name:  area?.name  || '',
     color: area?.color || AREA_COLORS[0].value,
+    lat:   area?.lat != null ? String(area.lat) : '',
+    lng:   area?.lng != null ? String(area.lng) : '',
   })
 
   function set(key, val) { setForm(f => ({ ...f, [key]: val })) }
@@ -32,6 +34,8 @@ export default function AddEditAreaModal({ area, eventId, onClose, onSaved }) {
       event_id: eventId,
       name:     form.name.trim(),
       color:    form.color,
+      lat:      form.lat !== '' ? parseFloat(form.lat) : null,
+      lng:      form.lng !== '' ? parseFloat(form.lng) : null,
     }
 
     const { error } = area
@@ -83,6 +87,31 @@ export default function AddEditAreaModal({ area, eventId, onClose, onSaved }) {
                   }}
                 />
               ))}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>PAM Map Location</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type="number"
+                step="any"
+                value={form.lat}
+                onChange={e => set('lat', e.target.value)}
+                placeholder="Latitude  e.g. -34.9297"
+                style={{ flex: 1 }}
+              />
+              <input
+                type="number"
+                step="any"
+                value={form.lng}
+                onChange={e => set('lng', e.target.value)}
+                placeholder="Longitude  e.g. 138.6173"
+                style={{ flex: 1 }}
+              />
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 4 }}>
+              Used to generate a PAM map directions link. Leave blank if not applicable.
             </div>
           </div>
 

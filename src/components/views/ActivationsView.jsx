@@ -10,13 +10,18 @@ import AddEditAreaModal        from '../modals/AddEditAreaModal'
 import AddEditAreaSessionModal from '../modals/AddEditAreaSessionModal'
 
 export default function ActivationsView() {
-  const { eventId, days, onTrack, areas, areaSessions, people, reload } = useEvent()
+  const { event, eventId, days, onTrack, areas, areaSessions, people, reload } = useEvent()
   const { profile } = useAuth()
   const { effectiveIsSuperAdmin: isSuperAdmin } = useViewAuth()
   const { toast } = useToast()
 
   const me = people.find(p => p.linked_user_id === profile?.id)
   const [joining, setJoining] = useState(null)
+
+  function pamDirectionsUrl(area) {
+    if (!event?.pam_nav_map_id || area.lat == null || area.lng == null) return null
+    return `https://connect.ap.app.pam.co/?navmapId=${event.pam_nav_map_id}#18/${area.lat}/${area.lng}/0/0`
+  }
 
   async function toggleJoinArea(session) {
     if (!me) return
@@ -123,6 +128,14 @@ export default function ActivationsView() {
 
   return (
     <div>
+      <style>{`
+        @media (max-width: 700px) {
+          .activations-grid { grid-template-columns: 1fr !important; }
+        }
+        @media (min-width: 701px) and (max-width: 1050px) {
+          .activations-grid { grid-template-columns: repeat(2, 1fr) !important; }
+        }
+      `}</style>
       {/* ── Day tabs ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
         <div className="day-tabs" style={{ margin: 0 }}>
@@ -160,14 +173,10 @@ export default function ActivationsView() {
         </div>
       )}
 
-      {/* ── Area columns ── */}
+      {/* ── Area grid ── */}
       {activeDay && (
         <div className="activations-grid" style={columnsGrid}>
-          {[0, 1, 2].map(colIdx => (
-            <div key={colIdx} style={columnStyle}>
-              {areas
-                .filter((_, i) => i % 3 === colIdx)
-                .map(area => {
+          {areas.map(area => {
                   const sessions = dayAreaSessions
                     .filter(s => s.area_id === area.id)
                     .sort((a, b) => areaStart(a, onTrack) - areaStart(b, onTrack))
@@ -183,19 +192,31 @@ export default function ActivationsView() {
                     <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>({sessions.length})</span>
                   </div>
 
-                  {isSuperAdmin && (
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <button
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    {pamDirectionsUrl(area) && (
+                      <a
+                        href={pamDirectionsUrl(area)}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="btn btn-ghost btn-xs"
-                        onClick={() => setEditingArea(area)}
-                      >Edit</button>
-                      <button
-                        className="btn btn-danger btn-xs"
-                        onClick={() => deleteArea(area)}
-                        disabled={deleting === area.id}
-                      >✕</button>
-                    </div>
-                  )}
+                        title="Open in PAM map"
+                        style={{ textDecoration: 'none' }}
+                      >📍</a>
+                    )}
+                    {isSuperAdmin && (
+                      <>
+                        <button
+                          className="btn btn-ghost btn-xs"
+                          onClick={() => setEditingArea(area)}
+                        >Edit</button>
+                        <button
+                          className="btn btn-danger btn-xs"
+                          onClick={() => deleteArea(area)}
+                          disabled={deleting === area.id}
+                        >✕</button>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 {/* Add session button */}
@@ -278,8 +299,6 @@ export default function ActivationsView() {
                   </div>
                   )
                 })}
-            </div>
-          ))}
         </div>
       )}
 
@@ -325,18 +344,12 @@ export default function ActivationsView() {
 // ── Style helpers ─────────────────────────────────────────────────────────────
 
 const columnsGrid = {
-  display: 'flex',
-  gap:     12,
-  alignItems: 'flex-start',
+  display:             'grid',
+  gridTemplateColumns: 'repeat(3, 1fr)',
+  gap:                 12,
+  alignItems:          'flex-start',
 }
 
-const columnStyle = {
-  flex:          1,
-  display:       'flex',
-  flexDirection: 'column',
-  gap:           12,
-  minWidth:      0,
-}
 
 function areaCard(color) {
   return {
