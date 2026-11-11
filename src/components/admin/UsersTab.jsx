@@ -31,7 +31,7 @@ export default function UsersTab() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviting,    setInviting]    = useState(false)
 
-  // ── Fetch users from edge function ─────────────────────────────────────────
+  // ── Fetch users from edge function + department_id from user_profiles ───────
   async function loadUsers() {
     setLoading(true)
     try {
@@ -40,7 +40,23 @@ export default function UsersTab() {
       })
       if (error) throw error
       if (!data?.ok) throw new Error(data?.error || 'Failed to load users')
-      setUsers(data.users || [])
+
+      const users = data.users || []
+
+      // Fetch department_id from user_profiles for all users
+      if (users.length > 0) {
+        const { data: profiles } = await supabase
+          .from('user_profiles')
+          .select('id, department_id')
+          .in('id', users.map(u => u.id))
+        if (profiles) {
+          const deptMap = {}
+          profiles.forEach(p => { deptMap[p.id] = p.department_id })
+          users.forEach(u => { u.department_id = deptMap[u.id] ?? null })
+        }
+      }
+
+      setUsers(users)
     } catch (err) {
       toast('Error loading users', err.message, 'danger')
     } finally {
@@ -97,6 +113,24 @@ export default function UsersTab() {
 
     toast('Updated', personId ? 'Person record linked' : 'Person unlinked', 'success')
     await reloadEvent()
+    setSaving(null)
+  }
+
+  // ── Assign department to user profile ─────────────────────────────────────
+  async function changeDepartment(userId, deptId) {
+    setSaving(userId)
+    const { error } = await supabase
+      .from('user_profiles')
+      .update({ department_id: deptId || null })
+      .eq('id', userId)
+
+    if (error) {
+      toast('Error', error.message, 'danger')
+    } else {
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, department_id: deptId || null } : u))
+      const deptName = departments.find(d => d.id === deptId)?.name
+      toast('Department updated', deptName ? `Set to ${deptName}` : 'Cleared', 'success')
+    }
     setSaving(null)
   }
 
@@ -305,21 +339,19 @@ export default function UsersTab() {
                     {/* Department */}
                     <td style={tdStyle}>
                       {(() => {
-                        const dept = linked ? deptById[linked.department_id] : null
-                        return dept ? (
-                          <span style={{
-                            fontSize: 11, fontWeight: 600,
-                            color: dept.color,
-                            background: `${dept.color}18`,
-                            border: `1px solid ${dept.color}44`,
-                            borderRadius: 4,
-                            padding: '1px 7px',
-                            whiteSpace: 'nowrap',
-                          }}>
-                            {dept.name}
-                          </span>
-                        ) : (
-                          <span style={{ color: 'var(--text-dim)', fontSize: 11 }}>—</span>
+                        const dept = deptById[u.department_id]
+                        return (
+                          <select
+                            value={u.department_id || ''}
+                            disabled={isSaving}
+                            onChange={e => changeDepartment(u.id, e.target.value || null)}
+                            style={deptSelectStyle(dept)}
+                          >
+                            <option value="">— none —</option>
+                            {departments.map(d => (
+                              <option key={d.id} value={d.id}>{d.name}</option>
+                            ))}
+                          </select>
                         )
                       })()}
                     </td>
@@ -406,6 +438,20 @@ function roleSelectStyle(role, isSelf) {
     fontWeight:  600,
     cursor:      isSelf ? 'not-allowed' : 'pointer',
     minWidth:    110,
+  }
+}
+
+function deptSelectStyle(dept) {
+  return {
+    background:  dept ? `${dept.color}14` : 'var(--surface2)',
+    border:      `1px solid ${dept ? `${dept.color}44` : 'var(--border)'}`,
+    color:       dept ? dept.color : 'var(--text-dim)',
+    borderRadius: 4,
+    padding:     '4px 6px',
+    fontSize:    12,
+    fontWeight:  dept ? 600 : 400,
+    cursor:      'pointer',
+    minWidth:    120,
   }
 }
 
