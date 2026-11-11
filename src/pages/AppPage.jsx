@@ -13,6 +13,8 @@ import LiveUpdateView       from '../components/views/LiveUpdateView'
 import ChecklistView        from '../components/views/ChecklistView'
 import DepartmentView       from '../components/views/DepartmentView'
 
+const APP_VERSION = '1.1.0'
+
 // ── Role display labels ──
 const ROLE_LABELS = {
   super_admin:  'Administrator',
@@ -106,7 +108,10 @@ function AppShell() {
             ‹ Events
           </button>
           <div>
-            <div style={styles.headerTitle}>{event.name}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={styles.headerTitle}>{event.name}</div>
+              <span style={{ fontSize: 10, color: 'var(--text-dim)', fontWeight: 500, letterSpacing: '0.5px' }}>v{APP_VERSION}</span>
+            </div>
             {event.venue && <div style={styles.headerSub} className="desktop-only">📍 {event.venue}</div>}
           </div>
         </div>
