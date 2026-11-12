@@ -175,24 +175,38 @@ export default function ChecklistView() {
         : items.filter(i => i.person_id === me?.id)
 
   // ── Excel export ──────────────────────────────────────────────────────────────
+  // The effective department for the current user (ops/regular — from user_profiles or person record)
+  const userDeptId = myDepartmentId || me?.department_id || null
+
   function exportToExcel() {
-    // For super_admin, filter by chosen department; otherwise use visibleItems as-is
-    let exportItems = visibleItems
+    let exportItems = []
     let deptLabel = ''
+
     if (isSuperAdmin && exportDeptId !== '__all__') {
+      // super_admin exporting a specific department
       const dept = departments.find(d => d.id === exportDeptId)
       deptLabel = dept?.name || ''
       exportItems = items.filter(i => {
-        if (!i.person_id) return exportDeptId === '__none__'
+        if (!i.person_id) return false
         const person = people.find(p => p.id === i.person_id)
         return person?.department_id === exportDeptId
       })
     } else if (isSuperAdmin && exportDeptId === '__all__') {
       exportItems = items
       deptLabel = 'All'
-    } else {
-      const dept = departments.find(d => d.id === myDepartmentId)
+    } else if (userDeptId) {
+      // Any user with a department — export full department checklist
+      const dept = departments.find(d => d.id === userDeptId)
       deptLabel = dept?.name || 'Team'
+      exportItems = items.filter(i => {
+        if (!i.person_id) return true
+        const person = people.find(p => p.id === i.person_id)
+        return person?.department_id === userDeptId
+      })
+    } else {
+      // No department set — export their own visible items
+      exportItems = visibleItems
+      deptLabel = me?.name || 'My'
     }
 
     const wb = XLSX.utils.book_new()
@@ -302,8 +316,8 @@ export default function ChecklistView() {
             </div>
           )}
 
-          {/* Export — visible to ops and above */}
-          {isOpsOrAbove && (
+          {/* Export — visible to all users */}
+          {(isOpsOrAbove || !!me) && (
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
               {isSuperAdmin && departments.length > 0 && (
                 <select
