@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import * as XLSX from 'xlsx'
 import { supabase } from '../../lib/supabase'
 import { useEvent } from '../../context/EventContext'
 import { useAuth } from '../../context/AuthContext'
@@ -92,17 +93,18 @@ function isDayOverduable(day) {
 // ── Main view ─────────────────────────────────────────────────────────────────
 
 export default function ChecklistView() {
-  const { eventId, people, onTrack, areaSessions, days } = useEvent()
+  const { eventId, people, onTrack, areaSessions, days, departments } = useEvent()
   const { user, profile } = useAuth()
   const { effectiveIsOpsOrAbove: isOpsOrAbove, effectiveIsSuperAdmin: isSuperAdmin, myDepartmentId } = useViewAuth()
   const { toast } = useToast()
 
-  const [items,       setItems]       = useState([])
-  const [loading,     setLoading]     = useState(true)
-  const [editingItem, setEditingItem] = useState(null)
-  const [addDayId,    setAddDayId]    = useState(null) // null = modal closed
-  const [saving,      setSaving]      = useState(null)
-  const [now,         setNow]         = useState(nowMins())
+  const [items,          setItems]          = useState([])
+  const [loading,        setLoading]        = useState(true)
+  const [editingItem,    setEditingItem]    = useState(null)
+  const [addDayId,       setAddDayId]       = useState(null)
+  const [saving,         setSaving]         = useState(null)
+  const [now,            setNow]            = useState(nowMins())
+  const [exportDeptId,   setExportDeptId]   = useState('__all__')
 
   useEffect(() => {
     const t = setInterval(() => setNow(nowMins()), 60_000)
@@ -172,6 +174,74 @@ export default function ChecklistView() {
         ? items.filter(i => !i.person_id || i.person_id === me?.id)
         : items.filter(i => i.person_id === me?.id)
 
+  // ── Excel export ──────────────────────────────────────────────────────────────
+  function exportToExcel() {
+    // For super_admin, filter by chosen department; otherwise use visibleItems as-is
+    let exportItems = visibleItems
+    let deptLabel = ''
+    if (isSuperAdmin && exportDeptId !== '__all__') {
+      const dept = departments.find(d => d.id === exportDeptId)
+      deptLabel = dept?.name || ''
+      exportItems = items.filter(i => {
+        if (!i.person_id) return exportDeptId === '__none__'
+        const person = people.find(p => p.id === i.person_id)
+        return person?.department_id === exportDeptId
+      })
+    } else if (isSuperAdmin && exportDeptId === '__all__') {
+      exportItems = items
+      deptLabel = 'All'
+    } else {
+      const dept = departments.find(d => d.id === myDepartmentId)
+      deptLabel = dept?.name || 'Team'
+    }
+
+    const wb = XLSX.utils.book_new()
+
+    sortedDays.forEach(day => {
+      const dayItems = sortByDueTime(
+        exportItems.filter(i => i.day_id === day.id),
+        onTrack, areaSessions
+      )
+
+      const rows = dayItems.map(item => {
+        const dueMins = getDueMins(item, onTrack, areaSessions)
+        const owner   = item.person_id ? people.find(p => p.id === item.person_id) : null
+        const ownerDept = owner?.department_id
+          ? departments.find(d => d.id === owner.department_id)?.name || ''
+          : ''
+        return {
+          'Time':        dueMins != null ? fromMins(dueMins) : '—',
+          'Task':        item.title,
+          'Description': item.description || '',
+          'Assigned To': owner?.name || 'Unassigned',
+          'Department':  ownerDept,
+          'Status':      item.completed ? 'Complete' : 'Pending',
+        }
+      })
+
+      if (rows.length === 0) {
+        rows.push({ 'Time': '', 'Task': 'No items', 'Description': '', 'Assigned To': '', 'Department': '', 'Status': '' })
+      }
+
+      const ws = XLSX.utils.json_to_sheet(rows)
+      ws['!cols'] = [
+        { wch: 8 },   // Time
+        { wch: 42 },  // Task
+        { wch: 42 },  // Description
+        { wch: 22 },  // Assigned To
+        { wch: 16 },  // Department
+        { wch: 10 },  // Status
+      ]
+
+      const sheetName = day.name.substring(0, 31)
+      XLSX.utils.book_append_sheet(wb, ws, sheetName)
+    })
+
+    const filename = `checklist-${deptLabel.replace(/\s+/g, '-').toLowerCase()}.xlsx`
+    XLSX.writeFile(wb, filename)
+    toast('Exported', `${filename} downloaded`, 'success')
+  }
+
   // People the dept lead can assign tasks to (their dept only)
   const assignablePeople = isSuperAdmin
     ? people
@@ -229,6 +299,39 @@ export default function ChecklistView() {
           {visibleItems.length > 0 && (
             <div style={progressBarStyle}>
               <div style={progressFill(totalDone / visibleItems.length)} />
+            </div>
+          )}
+
+          {/* Export — visible to ops and above */}
+          {isOpsOrAbove && (
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+              {isSuperAdmin && departments.length > 0 && (
+                <select
+                  value={exportDeptId}
+                  onChange={e => setExportDeptId(e.target.value)}
+                  style={{
+                    fontSize: 12,
+                    padding: '4px 8px',
+                    borderRadius: 6,
+                    border: '1px solid var(--border)',
+                    background: 'var(--surface)',
+                    color: 'var(--text)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="__all__">All departments</option>
+                  {departments.map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              )}
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={exportToExcel}
+                style={{ fontSize: 12, whiteSpace: 'nowrap' }}
+              >
+                ↓ Export Excel
+              </button>
             </div>
           )}
         </div>
