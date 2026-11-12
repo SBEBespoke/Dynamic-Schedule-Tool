@@ -1,10 +1,11 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ToastProvider }         from './context/ToastContext'
-import LoginPage       from './pages/LoginPage'
-import EventSelectPage from './pages/EventSelectPage'
-import AppPage         from './pages/AppPage'
-import AdminPage       from './pages/AdminPage'
+import LoginPage           from './pages/LoginPage'
+import EventSelectPage     from './pages/EventSelectPage'
+import AppPage             from './pages/AppPage'
+import AdminPage           from './pages/AdminPage'
+import PublicSchedulePage  from './pages/PublicSchedulePage'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth()
@@ -36,6 +37,8 @@ function AppRoutes() {
       <Route path="/event/:eventId/admin" element={
         <ProtectedRoute><AdminPage /></ProtectedRoute>
       } />
+
+      <Route path="/public/:eventId" element={<PublicSchedulePage />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

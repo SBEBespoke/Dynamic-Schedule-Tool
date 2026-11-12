@@ -149,6 +149,22 @@ function AppShell() {
             </div>
           )}
 
+          {isOpsOrAbove && (
+            <button
+              className="btn btn-ghost btn-sm"
+              title="Copy public view link"
+              onClick={() => {
+                const url = `${window.location.origin}${window.location.pathname}#/public/${event.id}`
+                navigator.clipboard.writeText(url).then(() => {
+                  // brief visual feedback
+                  const btn = document.activeElement
+                  if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copied!'; setTimeout(() => { btn.textContent = orig }, 1500) }
+                })
+              }}
+            >
+              🔗 <span className="desktop-only">Share</span>
+            </button>
+          )}
           {isSuperAdmin && (
             <button
               className="btn btn-ghost btn-sm"
